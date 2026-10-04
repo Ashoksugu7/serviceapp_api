@@ -1,6 +1,6 @@
 # ServiceOps360 API
 
-Tasks T01–T18 and T23 are complete through authentication, master data, dynamic forms, service workflows and [final backend verification](docs/backend-verification.md). T24 handover documentation is next in [API_TASKS.md](../API_TASKS.md).
+Go REST API for ServiceOps360, covering authentication, master data, dynamic forms and service workflows. The implementation has been validated against its database migrations and OpenAPI contract; see [backend verification](docs/backend-verification.md).
 
 ## Layout
 
@@ -116,11 +116,9 @@ the API and may create the first administrator separately. The optional
 `bootstrap-super-admin` command connects to the external database interactively.
 Put the API behind a TLS-terminating reverse proxy before serving it publicly.
 
-## Verification status
+## Verification
 
-T02 passed `go test ./...`, `go test -race ./...`, `go vet ./...`, formatting and module verification. Tests cover configuration, safe database errors, JSON decoding/body limits, health routing, HEAD responses, timeout cancellation and server startup/shutdown. A runtime check connected to the configured PostgreSQL database, returned successful live/ready health responses on a temporary port and logged graceful shutdown.
-
-T03–T05 SQL migration/constraint/down/reapply tests passed on PostgreSQL 14.20 after final contract reconciliation. Authentication unit, HTTP and disposable-schema repository integration tests pass. The application database has not been migrated.
+`go test ./...`, `go test -race ./...`, `go vet ./...`, formatting and module verification have passed. Tests cover configuration, safe database errors, JSON decoding/body limits, health routing, HEAD responses, timeout cancellation, server startup/shutdown, authentication, HTTP handling, and disposable-schema repository integration. Database migration constraint/down/reapply checks passed on PostgreSQL 14.20 after contract reconciliation. The application database has not been migrated.
 
 When compilation and runtime checks are authorized, run from this directory:
 
@@ -137,4 +135,4 @@ After applying migrations, create the first SUPER_ADMIN in an interactive termin
 go run ./cmd/bootstrap-super-admin
 ```
 
-T01 is complete as a [requirements baseline](docs/t01-requirements.md), with a validated [OpenAPI contract](contracts/openapi.json). Transaction behavior is summarized in the [Out-Store workflow](docs/out-store-workflow.md) and [stand-by workflow](docs/standby-workflow.md). T23 results are recorded in [backend verification](docs/backend-verification.md). Next is T24 handover documentation. See [migration instructions](migrations/README.md).
+The [requirements baseline](docs/t01-requirements.md) and validated [OpenAPI contract](contracts/openapi.json) define the API behavior. Transaction behavior is summarized in the [Out-Store workflow](docs/out-store-workflow.md) and [stand-by workflow](docs/standby-workflow.md). See [backend verification](docs/backend-verification.md) and [migration instructions](migrations/README.md) for operational details.
