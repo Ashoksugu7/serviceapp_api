@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -124,32 +125,36 @@ func TestAuthStoreLifecycle(t *testing.T) {
 		t.Fatalf("onboard company: %v", err)
 	}
 	secondCompanyID := onboarded["company"].(map[string]any)["id"].(string)
+	// T30: one blank "Service" profile with the default statuses, no preset
+	// fields and no staff roles.
 	profiles, err := catalog.List(ctx, "service-profiles", secondCompanyID, "")
-	if err != nil || len(profiles) != 2 {
-		t.Fatalf("default profiles=%d err=%v", len(profiles), err)
+	if err != nil || len(profiles) != 1 || profiles[0]["name"] != "Service" || profiles[0]["prefix"] != "S" || profiles[0]["out_store_enabled"] != false {
+		t.Fatalf("default profiles=%+v err=%v", profiles, err)
 	}
-	jobCardID := profiles[0]["id"].(string)
-	if profiles[0]["prefix"] != "A" {
-		jobCardID = profiles[1]["id"].(string)
+	serviceID := profiles[0]["id"].(string)
+	fields, err := catalog.List(ctx, "fields", secondCompanyID, serviceID)
+	if err != nil || len(fields) != 0 {
+		t.Fatalf("Service fields=%d err=%v", len(fields), err)
 	}
-	fields, err := catalog.List(ctx, "fields", secondCompanyID, jobCardID)
-	if err != nil || len(fields) != 16 {
-		t.Fatalf("Job Card fields=%d err=%v", len(fields), err)
-	}
-	form, err := catalog.GetForm(ctx, secondCompanyID, jobCardID)
-	if err != nil || len(form["core_fields"].([]any)) != 3 || len(form["staff_roles"].([]any)) != 3 {
+	form, err := catalog.GetForm(ctx, secondCompanyID, serviceID)
+	if err != nil || len(form["core_fields"].([]any)) != 3 || len(form["staff_roles"].([]any)) != 0 {
 		t.Fatalf("form contract invalid: %+v err=%v", form, err)
 	}
+	assertDefaultStatuses(t, catalog, secondCompanyID, profiles[0])
 	customer, err := catalog.Create(ctx, "customers", secondCompanyID, "", map[string]any{"name": "Customer", "contact": "123"})
 	if _, numbered := customer["customer_no"]; err != nil || numbered {
 		t.Fatalf("customer without number: %+v err=%v", customer, err)
 	}
 	roles, err := catalog.List(ctx, "staff-roles", secondCompanyID, "")
-	if err != nil || len(roles) != 3 {
+	if err != nil || len(roles) != 0 {
 		t.Fatalf("staff roles=%d err=%v", len(roles), err)
 	}
+	role, err := catalog.Create(ctx, "staff-roles", secondCompanyID, "", map[string]any{"name": "Engineer"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	staff, err := catalog.Create(ctx, "staff", secondCompanyID, "", map[string]any{
-		"name": "Engineer", "contact": "555", "role_ids": []any{roles[0]["id"]},
+		"name": "Engineer", "contact": "555", "role_ids": []any{role["id"]},
 	})
 	if err != nil || len(staff["role_ids"].([]any)) != 1 {
 		t.Fatalf("staff roles not assigned: %+v err=%v", staff, err)
@@ -158,10 +163,11 @@ func TestAuthStoreLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	customStatuses, err := catalog.List(ctx, "statuses", secondCompanyID, custom["id"].(string))
-	if err != nil || len(customStatuses) != 7 {
-		t.Fatalf("custom statuses=%d err=%v", len(customStatuses), err)
+	custom, err = catalog.Get(ctx, "service-profiles", secondCompanyID, "", custom["id"].(string))
+	if err != nil {
+		t.Fatal(err)
 	}
+	assertDefaultStatuses(t, catalog, secondCompanyID, custom)
 
 	// T29: a reset link works once, sets the password, clears the temporary flag
 	// and signs the user out; expired links are refused.
@@ -194,5 +200,34 @@ func TestAuthStoreLifecycle(t *testing.T) {
 	}
 	if err := auth.ConfirmPasswordReset(ctx, expired.Token, "Reset password 79"); !errors.Is(err, service.ErrResetTokenInvalid) {
 		t.Fatalf("expired link accepted: %v", err)
+	}
+}
+
+// assertDefaultStatuses checks the T31 statuses, their order, flags and the
+// Out-Store mapping of a newly created profile.
+func assertDefaultStatuses(t *testing.T, catalog *repository.CatalogStore, companyID string, profile map[string]any) {
+	t.Helper()
+	statuses, err := catalog.List(context.Background(), "statuses", companyID, profile["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []struct {
+		name            string
+		initial, closed bool
+	}{{"Open", true, false}, {"In Progress", false, false}, {"Sent to Out-Store", false, false}, {"Received from Out-Store", false, false}, {"Closed", false, true}, {"Returned Not Repaired", false, true}}
+	if len(statuses) != len(want) {
+		t.Fatalf("default statuses=%+v", statuses)
+	}
+	sort.Slice(statuses, func(i, j int) bool { return statuses[i]["sort_order"].(float64) < statuses[j]["sort_order"].(float64) })
+	byName := map[string]string{}
+	for i, w := range want {
+		got := statuses[i]
+		if got["name"] != w.name || got["initial"] != w.initial || got["closed"] != w.closed || got["sort_order"] != float64(i) {
+			t.Fatalf("status %d = %+v, want %+v", i, got, w)
+		}
+		byName[w.name] = got["id"].(string)
+	}
+	if profile["sent_status_id"] != byName["Sent to Out-Store"] || profile["received_status_id"] != byName["Received from Out-Store"] {
+		t.Fatalf("Out-Store mapping %v/%v", profile["sent_status_id"], profile["received_status_id"])
 	}
 }

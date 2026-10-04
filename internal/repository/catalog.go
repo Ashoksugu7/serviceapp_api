@@ -813,12 +813,8 @@ func (s *CatalogStore) createProfile(ctx context.Context, companyID string, valu
 	if err := tx.QueryRow(ctx, fmt.Sprintf("INSERT INTO service_profiles(%s)VALUES(%s)RETURNING id::text", strings.Join(columns, ","), strings.Join(placeholders, ",")), args...).Scan(&id); err != nil {
 		return nil, err
 	}
-	statuses := []string{"Pending", "Assigned", "In-Progress", "Completed", "Sent", "Delivered", "Returned Not Repaired"}
-	for order, name := range statuses {
-		closed := name == "Delivered" || name == "Returned Not Repaired"
-		if _, err := tx.Exec(ctx, `INSERT INTO service_profile_statuses(company_id,profile_id,name,sort_order,is_initial,is_closed)VALUES($1,$2,$3,$4,$5,$6)`, companyID, id, name, order, name == "Pending", closed); err != nil {
-			return nil, err
-		}
+	if err := insertDefaultStatuses(ctx, tx, companyID, id); err != nil {
+		return nil, err
 	}
 	item, err := scanObject(tx.QueryRow(ctx, `SELECT to_jsonb(p) FROM service_profiles p WHERE id=$1`, id))
 	if err != nil {
@@ -1078,49 +1074,14 @@ func (s *CatalogStore) OnboardCompany(ctx context.Context, in CompanyOnboarding)
 	if err != nil {
 		return nil, err
 	}
-	roles := map[string]string{}
-	for _, name := range []string{"Attended By", "Service Engineer", "Delivered By"} {
-		var id string
-		if err := tx.QueryRow(ctx, `INSERT INTO staff_roles(company_id,name,is_system)VALUES($1,$2,$3)RETURNING id::text`, companyID, name, name != "Delivered By").Scan(&id); err != nil {
-			return nil, err
-		}
-		roles[name] = id
+	// T30: a new company starts with one blank profile and no staff roles or
+	// preset fields; admins add their own.
+	var profileID string
+	if err := tx.QueryRow(ctx, `INSERT INTO service_profiles(company_id,name,prefix)VALUES($1,'Service','S')RETURNING id::text`, companyID).Scan(&profileID); err != nil {
+		return nil, err
 	}
-	profiles := []struct {
-		name, prefix string
-		out          bool
-		statuses     []string
-		initial      string
-	}{{"Job Card", "A", true, []string{"Pending", "Assigned", "In-Progress", "Completed", "Sent to Out-Store", "Delivered", "Returned Not Repaired"}, "Pending"}, {"Refill", "RF", false, []string{"Received", "In-Progress", "Completed", "Sent", "Delivered", "Returned Not Repaired"}, "Received"}}
-	for _, p := range profiles {
-		var pid string
-		if err := tx.QueryRow(ctx, `INSERT INTO service_profiles(company_id,name,prefix,out_store_enabled)VALUES($1,$2,$3,$4)RETURNING id::text`, companyID, p.name, p.prefix, p.out).Scan(&pid); err != nil {
-			return nil, err
-		}
-		statusIDs := map[string]string{}
-		for i, n := range p.statuses {
-			var sid string
-			closed := n == "Delivered" || n == "Returned Not Repaired"
-			if err := tx.QueryRow(ctx, `INSERT INTO service_profile_statuses(company_id,profile_id,name,sort_order,is_initial,is_closed)VALUES($1,$2,$3,$4,$5,$6)RETURNING id::text`, companyID, pid, n, i, n == p.initial, closed).Scan(&sid); err != nil {
-				return nil, err
-			}
-			statusIDs[n] = sid
-		}
-		if p.out {
-			_, err = tx.Exec(ctx, `UPDATE service_profiles SET sent_status_id=$2,received_status_id=$3 WHERE id=$1`, pid, statusIDs["Sent to Out-Store"], statusIDs["Completed"])
-			if err != nil {
-				return nil, err
-			}
-		}
-		prefix := "jc_"
-		if p.prefix == "RF" {
-			prefix = "rf_"
-		}
-		for i, f := range defaultFields(prefix, roles) {
-			if _, err := tx.Exec(ctx, `INSERT INTO service_profile_fields(company_id,profile_id,field_key,label,field_type,required,sort_order,config)VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, companyID, pid, f[0], f[1], f[2], f[3] == "true", i, json.RawMessage(f[4])); err != nil {
-				return nil, err
-			}
-		}
+	if err := insertDefaultStatuses(ctx, tx, companyID, profileID); err != nil {
+		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
@@ -1132,11 +1093,40 @@ func (s *CatalogStore) OnboardCompany(ctx context.Context, in CompanyOnboarding)
 	// CompanyOnboarded: the company and its first admin (callers add delivery).
 	return map[string]any{"company": company, "admin": admin}, nil
 }
-func defaultFields(prefix string, roles map[string]string) [][]string {
-	if prefix == "rf_" {
-		return [][]string{{"rf_attendedby", "Attended By", "staff_role", "false", fmt.Sprintf(`{"role_id":%q}`, roles["Attended By"])}, {"rf_toner", "Toner Model", "text", "true", `{}`}, {"rf_engineer", "Assigned Engineer", "staff_role", "false", fmt.Sprintf(`{"role_id":%q}`, roles["Service Engineer"])}, {"rf_charges", "Charges / Refilling", "linked_charges", "false", `{}`}, {"rf_totalamount", "Total Amount", "number", "false", `{"currency":true}`}, {"rf_deliverydate", "Delivery Date", "date", "false", `{"quick_pick":true}`}, {"rf_deliveredby", "Delivered By", "staff_role", "false", fmt.Sprintf(`{"role_id":%q}`, roles["Delivered By"])}, {"rf_remarks", "Remarks", "text", "false", `{"multiline":true}`}}
+
+// defaultStatuses are given to every new profile (T31), in this order.
+var defaultStatuses = []struct {
+	name            string
+	initial, closed bool
+	sent, received  bool
+}{
+	{name: "Open", initial: true},
+	{name: "In Progress"},
+	{name: "Sent to Out-Store", sent: true},
+	{name: "Received from Out-Store", received: true},
+	{name: "Closed", closed: true},
+	{name: "Returned Not Repaired", closed: true},
+}
+
+// insertDefaultStatuses adds the default statuses to a new profile and maps
+// the two Out-Store statuses, so Out-Store can be switched on without setup.
+// Out-Store itself stays off until an admin enables it.
+func insertDefaultStatuses(ctx context.Context, tx pgx.Tx, companyID, profileID string) error {
+	var sentID, receivedID string
+	for order, status := range defaultStatuses {
+		var id string
+		if err := tx.QueryRow(ctx, `INSERT INTO service_profile_statuses(company_id,profile_id,name,sort_order,is_initial,is_closed)VALUES($1,$2,$3,$4,$5,$6)RETURNING id::text`, companyID, profileID, status.name, order, status.initial, status.closed).Scan(&id); err != nil {
+			return err
+		}
+		if status.sent {
+			sentID = id
+		}
+		if status.received {
+			receivedID = id
+		}
 	}
-	return [][]string{{"jc_attendedby", "Attended By", "staff_role", "false", fmt.Sprintf(`{"role_id":%q}`, roles["Attended By"])}, {"jc_servicetype", "Service Type", "choice", "true", `{"options":["In-Person","In-Store"]}`}, {"jc_duedate", "Due Date", "date", "false", `{"quick_pick":true}`}, {"jc_product", "Product", "linked_product", "false", `{}`}, {"jc_serial", "Serial No", "text", "false", `{}`}, {"jc_complaint", "Complaint", "text", "true", `{"multiline":true}`}, {"jc_accessories", "Accessories", "text", "false", `{}`}, {"jc_address", "Address", "text", "false", `{}`}, {"jc_advance", "Advance Amount", "number", "false", `{"currency":true}`}, {"jc_totalamount", "Total Amount", "number", "false", `{"currency":true}`}, {"jc_balance", "Balance Due", "number", "false", `{"currency":true,"formula":{"a":"jc_totalamount","op":"-","b":"jc_advance"}}`}, {"jc_services", "Services Provided", "linked_charges", "false", `{}`}, {"jc_engineer", "Service Engineer", "staff_role", "false", fmt.Sprintf(`{"role_id":%q}`, roles["Service Engineer"])}, {"jc_deliverydate", "Delivery Date", "date", "false", `{"quick_pick":true}`}, {"jc_deliveredby", "Delivered By", "staff_role", "false", fmt.Sprintf(`{"role_id":%q}`, roles["Delivered By"])}, {"jc_reminder", "Reminder", "date", "false", `{"toggle_based":true}`}}
+	_, err := tx.Exec(ctx, `UPDATE service_profiles SET sent_status_id=$3,received_status_id=$4 WHERE company_id=$1 AND id=$2`, companyID, profileID, sentID, receivedID)
+	return err
 }
 
 func (s *CatalogStore) SetOutStoreMapping(ctx context.Context, companyID, profileID string, sentID, receivedID *string) (map[string]any, error) {

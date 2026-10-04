@@ -2,7 +2,8 @@
 
 Tasks T07–T14 implement the authenticated company administration, master-data and dynamic-form routes in the validated OpenAPI contract.
 
-- Company onboarding creates the company, first ADMIN, Job Card and Refill profiles, 14 statuses, three staff roles and all 24 reference fields in one transaction.
+- Company onboarding creates the company, first ADMIN and one blank **Service** profile (prefix `S`) with the default statuses in one transaction. Since T30 (4 October 2026) it no longer seeds the Job Card/Refill profiles, their 24 preset fields or any staff roles; admins create their own. Existing companies keep their data.
+- Every new profile gets the default statuses (T31), in order: **Open** (initial), **In Progress**, **Sent to Out-Store**, **Received from Out-Store**, **Closed** (closed), **Returned Not Repaired** (closed). Out-Store sent/received are mapped to the two Out-Store statuses, so Out-Store can be switched on without extra setup; it stays off until enabled.
 - Customers use a locked company counter for `C-{number}` allocation. User password changes revoke active sessions, and the final active company ADMIN cannot be deactivated or demoted.
 - Company IDs come from the authenticated route scope. Composite database relationships reject cross-company profiles, roles and master references.
 - ADMIN writes and USER reads follow the T01 matrix. SUPER_ADMIN is limited to company, user and profile/form administration.

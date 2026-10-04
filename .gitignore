@@ -16,10 +16,12 @@ coverage.out
 .env.*
 !.env.example
 docker.env
+*.log
 
 # Runtime logs
 /logs/
-*.log
+/logs/*.log
+
 
 # Local tooling and OS files
 .DS_Store

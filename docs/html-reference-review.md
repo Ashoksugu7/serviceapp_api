@@ -1,5 +1,8 @@
 # Computer services HTML reference review
 
+> **Superseded 4 October 2026 (T30, T31):** onboarding now creates one blank "Service" profile with the default statuses Open → In Progress → Sent to Out-Store → Received from Out-Store → Closed / Returned Not Repaired, and no staff roles or preset fields. The Job Card/Refill definitions below remain a reference for admins building their own profiles. See [management and forms](management-and-forms.md).
+
+
 Reviewed [computer-services.html](../../computer-services.html) by inspecting its embedded JavaScript and markup. This is a source-level behavior review, not a browser interaction or visual QA pass. The application bundle and CSS are inline; external links supply the Inter font. No separate application script is required for this review.
 
 The HTML is a React state-based prototype with sample records. Its bundled symbols below are searchable evidence locators; they are not proposed production names. The v3 documents remain authoritative for authentication, tenant isolation, relational references, historical preservation and Phase 2 exclusions.

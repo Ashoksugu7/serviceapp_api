@@ -1,3 +1,9 @@
 {"time":"2026-10-04T11:34:31.65324+05:30","level":"INFO","msg":"email delivery","mode":"log","app_base_url":"http://localhost:3000"}
 {"time":"2026-10-04T11:34:31.655104+05:30","level":"INFO","msg":"API started","address":"127.0.0.1:8080"}
 {"time":"2026-10-04T11:34:31.792025+05:30","level":"INFO","msg":"API shutting down"}
+[2026-10-04 11:45:38] Starting ServiceOps360 API
+{"time":"2026-10-04T11:45:39.459036+05:30","level":"INFO","msg":"email delivery","mode":"log","app_base_url":"http://localhost:3000"}
+{"time":"2026-10-04T11:45:39.460548+05:30","level":"INFO","msg":"API started","address":"127.0.0.1:8080"}
+{"time":"2026-10-04T11:50:42.037293+05:30","level":"INFO","msg":"HTTP request completed","method":"POST","path":"/mcp","status":200,"duration":9180792}
+{"time":"2026-10-04T11:50:52.879473+05:30","level":"INFO","msg":"HTTP request completed","method":"POST","path":"/mcp","status":200,"duration":3243625}
+{"time":"2026-10-04T11:50:52.891767+05:30","level":"WARN","msg":"HTTP request failed","method":"GET","path":"/openapi.json","status":404,"duration":65542,"error_code":"NOT_FOUND","error_message":"Route not found"}

@@ -23,6 +23,8 @@
 
 > **Superseded 4 October 2026 (T32, T33):** customer numbers and the `customer_no` core key were removed — customers are found and de-duplicated by mobile number; company codes were removed; unused statuses can be deleted. See [schema decisions](schema-decisions.md#later-changes-4-october-2026) and [management and forms](management-and-forms.md).
 
+> **Superseded 4 October 2026 (T30, T31):** onboarding now creates one blank "Service" profile with the default statuses Open → In Progress → Sent to Out-Store → Received from Out-Store → Closed / Returned Not Repaired, and no staff roles or preset fields. The Job Card/Refill definitions below remain a reference for admins building their own profiles. See [management and forms](management-and-forms.md).
+
 ## D01 Reference defaults
 
 Use the [reference inventory](html-reference-review.md) for four protected core controls and all 24 configurable dynamic fields. Seed Job Card (prefix A, Out-Store enabled) and Refill (prefix RF, Out-Store disabled), with the listed statuses/mappings. Seed Attended By and Service Engineer as system staff roles; Delivered By is an initial custom role. Do not seed sample people or business transactions.

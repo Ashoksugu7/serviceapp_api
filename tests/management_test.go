@@ -93,17 +93,17 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 		Items []map[string]any `json:"items"`
 	}
 	_ = json.Unmarshal(profiles.Body.Bytes(), &list)
-	if len(list.Items) != 2 {
-		t.Fatalf("profiles=%d", len(list.Items))
+	// T30: onboarding creates one blank "Service" profile and no staff roles.
+	if len(list.Items) != 1 || list.Items[0]["name"] != "Service" || list.Items[0]["prefix"] != "S" {
+		t.Fatalf("onboarded profiles %s", profiles.Body.String())
 	}
-	var jobCardID, refillID string
-	for _, profile := range list.Items {
-		if profile["prefix"] == "A" {
-			jobCardID = profile["id"].(string)
-		} else if profile["prefix"] == "RF" {
-			refillID = profile["id"].(string)
-		}
+	if roles := httpJSON(t, handler, http.MethodGet, "/api/v1/companies/"+companyID+"/staff-roles", ownerToken, ""); roles.Code != 200 || !strings.Contains(roles.Body.String(), `"items":[]`) {
+		t.Fatalf("onboarded staff roles %d %s", roles.Code, roles.Body.String())
 	}
+	if blank := httpJSON(t, handler, http.MethodGet, "/api/v1/companies/"+companyID+"/service-profiles/"+list.Items[0]["id"].(string)+"/form", ownerToken, ""); blank.Code != 200 || !strings.Contains(blank.Body.String(), `"fields":[]`) || !strings.Contains(blank.Body.String(), `"name":"Received from Out-Store"`) {
+		t.Fatalf("blank profile form %d %s", blank.Code, blank.Body.String())
+	}
+	jobCardID, refillID := createReferenceProfiles(t, handler, ownerToken, companyID)
 	form := httpJSON(t, handler, http.MethodGet, "/api/v1/companies/"+companyID+"/service-profiles/"+jobCardID+"/form", ownerToken, "")
 	if form.Code != 200 || !strings.Contains(form.Body.String(), "core_fields") {
 		t.Fatalf("form %d %s", form.Code, form.Body.String())
@@ -114,17 +114,17 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	var pendingID, assignedID, completedID, deliveredID string
 	for _, raw := range statuses {
 		status := raw.(map[string]any)
-		if status["name"] == "Pending" {
+		// Default statuses (T31): Open is initial, Received from Out-Store is the
+		// mapped received-back status and Closed is closed.
+		switch status["name"] {
+		case "Open":
 			pendingID = status["id"].(string)
-		}
-		if status["name"] == "Assigned" {
+		case "In Progress":
 			assignedID = status["id"].(string)
-		}
-		if status["name"] == "Delivered" {
-			deliveredID = status["id"].(string)
-		}
-		if status["name"] == "Completed" {
+		case "Received from Out-Store":
 			completedID = status["id"].(string)
+		case "Closed":
+			deliveredID = status["id"].(string)
 		}
 	}
 	var productFieldID string
@@ -157,6 +157,10 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	}
 	var customProfileBody map[string]any
 	_ = json.Unmarshal(customProfile.Body.Bytes(), &customProfileBody)
+	// T31: a new profile can turn on Out-Store without extra setup.
+	if outStoreOn := httpJSON(t, handler, http.MethodPatch, "/api/v1/companies/"+companyID+"/service-profiles/"+customProfileBody["id"].(string), ownerToken, `{"out_store_enabled":true}`); outStoreOn.Code != 200 {
+		t.Fatalf("enable Out-Store on new profile %d %s", outStoreOn.Code, outStoreOn.Body.String())
+	}
 	archivedProfile := httpJSON(t, handler, http.MethodDelete, "/api/v1/companies/"+companyID+"/service-profiles/"+customProfileBody["id"].(string), ownerToken, "")
 	if archivedProfile.Code != 204 {
 		t.Fatalf("profile archive route %d %s", archivedProfile.Code, archivedProfile.Body.String())
@@ -173,6 +177,10 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	reservedField := httpJSON(t, handler, http.MethodPost, profilePath+"/fields", ownerToken, `{"key":"service_date","label":"Duplicate","type":"date","config":{}}`)
 	if reservedField.Code != 400 {
 		t.Fatalf("reserved core field=%d %s", reservedField.Code, reservedField.Body.String())
+	}
+	// New profiles are mapped by default (T31); without a mapping Out-Store cannot be enabled.
+	if cleared := httpJSON(t, handler, http.MethodPut, "/api/v1/companies/"+companyID+"/service-profiles/"+refillID+"/out-store-mapping", ownerToken, `{"sent_status_id":null,"received_status_id":null}`); cleared.Code != 200 {
+		t.Fatalf("clear Refill mapping %d %s", cleared.Code, cleared.Body.String())
 	}
 	refillEnable := httpJSON(t, handler, http.MethodPatch, "/api/v1/companies/"+companyID+"/service-profiles/"+refillID, ownerToken, `{"out_store_enabled":true}`)
 	if refillEnable.Code != 409 {
@@ -312,10 +320,11 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 			Creators []map[string]any `json:"creators"`
 		} `json:"facets"`
 	}
-	facetResponse := httpJSON(t, handler, http.MethodGet, requestPath+"?facets=true&status_name=Pending", ownerToken, "")
+	facetResponse := httpJSON(t, handler, http.MethodGet, requestPath+"?facets=true&status_name=Open", ownerToken, "")
 	_ = json.Unmarshal(facetResponse.Body.Bytes(), &faceted)
 	// Status counts ignore the status filter so other chips still show totals.
-	if faceted.Facets.Open != 3 || len(faceted.Facets.Statuses) != 3 || len(faceted.Facets.Creators) != 1 || faceted.Facets.Creators[0]["name"] != "Owner" {
+	// Counts group by name across profiles: both profiles' "Open" share a chip.
+	if faceted.Facets.Open != 3 || len(faceted.Facets.Statuses) != 2 || len(faceted.Facets.Creators) != 1 || faceted.Facets.Creators[0]["name"] != "Owner" {
 		t.Fatalf("facets: %s", facetResponse.Body.String())
 	}
 	for _, query := range []string{"?state=done", "?out_store=lost", "?created_by=nope", "?overdue=maybe", "?sort=customer"} {
@@ -382,17 +391,7 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	_ = json.Unmarshal(secondCompany.Body.Bytes(), &secondCompanyBody)
 	secondCompanyID := secondCompanyBody["company"].(map[string]any)["id"].(string)
 	betaToken := activateAccount(t, handler, "beta@example.test", secondCompany, "beta owner password 4")
-	betaProfiles := httpJSON(t, handler, http.MethodGet, "/api/v1/companies/"+secondCompanyID+"/service-profiles", betaToken, "")
-	var betaProfileList struct {
-		Items []map[string]any `json:"items"`
-	}
-	_ = json.Unmarshal(betaProfiles.Body.Bytes(), &betaProfileList)
-	var betaJobCardID string
-	for _, profile := range betaProfileList.Items {
-		if profile["prefix"] == "A" {
-			betaJobCardID = profile["id"].(string)
-		}
-	}
+	betaJobCardID, _ := createReferenceProfiles(t, handler, betaToken, secondCompanyID)
 	betaCustomer := httpJSON(t, handler, http.MethodPost, "/api/v1/companies/"+secondCompanyID+"/customers", betaToken, `{"name":"Beta Customer","contact":"777"}`)
 	var betaCustomerBody map[string]any
 	_ = json.Unmarshal(betaCustomer.Body.Bytes(), &betaCustomerBody)

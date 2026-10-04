@@ -651,7 +651,7 @@
         "x-roles": [
           "SUPER_ADMIN"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Creates the company, its first ADMIN (with a server-generated temporary password, emailed when possible) and one blank \"Service\" profile (prefix S) with the default statuses (T30). No staff roles or preset fields are created.",
         "responses": {
           "201": {
             "description": "Success",
@@ -5354,7 +5354,7 @@
           "SUPER_ADMIN",
           "ADMIN"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Creates a profile with no dynamic fields and the default statuses Open (initial), In Progress, Sent to Out-Store, Received from Out-Store, Closed and Returned Not Repaired (both closed). Out-Store sent/received are mapped to the two Out-Store statuses; Out-Store stays off until enabled (T31).",
         "responses": {
           "201": {
             "description": "Success",
