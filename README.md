@@ -107,12 +107,15 @@ the API and connects it to the externally managed PostgreSQL instance named by
 cp docker.env.example docker.env
 # Edit docker.env: use a strong PostgreSQL password and a 32+ byte random JWT secret.
 docker compose --env-file docker.env build
+docker compose --env-file docker.env --profile tools run --rm migrate
 docker compose --env-file docker.env up -d api
 docker compose --env-file docker.env --profile tools run --rm -it bootstrap-super-admin
 ```
 
 Your database administrator must apply the project migrations before starting
-the API and may create the first administrator separately. The optional
+the API; the `migrate` service runs the included migration script with
+`up --yes`. Back up the database before running it, especially when migration
+000008 is pending. The optional
 `bootstrap-super-admin` command connects to the external database interactively.
 Put the API behind a TLS-terminating reverse proxy before serving it publicly.
 
@@ -126,8 +129,10 @@ When compilation and runtime checks are authorized, run from this directory:
 go test ./...
 go vet ./...
 # Set the required environment variables before starting:
-go run ./cmd/api
+./run.sh
 ```
+
+`run.sh` creates `logs/` when needed and appends API output to `logs/api.log`.
 
 After applying migrations, create the first SUPER_ADMIN in an interactive terminal:
 
