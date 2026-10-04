@@ -1,0 +1,26 @@
+# Build artifacts
+/bin/
+/tmp/
+*.exe
+*.test
+*.out
+
+# Coverage and profiling output
+/coverage/
+coverage.out
+*.coverprofile
+*.prof
+
+# Local environment configuration and secrets
+.env
+.env.*
+!.env.example
+docker.env
+
+# Runtime logs
+/logs/*.log
+
+# Local tooling and OS files
+.DS_Store
+.idea/
+.vscode/
