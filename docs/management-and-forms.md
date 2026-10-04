@@ -13,3 +13,14 @@ Tasks T07–T14 implement the authenticated company administration, master-data 
 - Dynamic definitions reject reserved core keys, invalid field types and invalid choice/staff-role configuration. The reusable form-data validator checks required, unknown, disabled and type-invalid submitted values for T15.
 
 Repository and HTTP integration tests run in disposable PostgreSQL schemas. The application database has not been migrated.
+
+## Server-side lists (T37, 4 October 2026)
+
+Companies, users, customers, staff, staff roles, products, charges, Out-Store shops, stand-by items, service profiles, and each profile's fields and statuses are paged on the server: `page` (default 1), `page_size` (1–100, default 25), `q`, `sort`, `order` and the documented filters (`status`, `role`, `profile_id`, `is_active`, `enabled`). Responses carry the real `total`.
+
+- `q` matches the list's text columns case-insensitively; `%` and `_` match literally. Customer, staff, user and shop mobile numbers also match by digits, so `98765 43210` and `9876543210` find the same record.
+- Default sort is by name (shops by `shop_name`, fields and statuses by `sort_order`); ties break by ID so pages are stable.
+- `profile_id` on shops also returns shops available to every profile.
+- An unknown parameter, sort, order or filter value returns 400 naming the parameter.
+
+Out-Store list and detail rows (T38) add `request_no`, `profile_id`, `profile_name`, `customer_id`, `customer_name`, `customer_contact`, `shop_name`, `shop_contact` and `overdue`; the list also accepts `q` (record number, customer, mobile digits or shop).

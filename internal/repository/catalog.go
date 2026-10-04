@@ -997,27 +997,6 @@ func scanObject(row interface{ Scan(...any) error }) (map[string]any, error) {
 	return out, nil
 }
 
-func (s *CatalogStore) ListCompanies(ctx context.Context) ([]map[string]any, error) {
-	rows, err := s.pool.Query(ctx, `SELECT to_jsonb(c) FROM companies c ORDER BY name,id`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []map[string]any{}
-	for rows.Next() {
-		var raw []byte
-		if err := rows.Scan(&raw); err != nil {
-			return nil, err
-		}
-		var item map[string]any
-		if err := json.Unmarshal(raw, &item); err != nil {
-			return nil, err
-		}
-		out = append(out, item)
-	}
-	return out, rows.Err()
-}
-
 func (s *CatalogStore) ListServiceRecordProfileOptions(ctx context.Context, companyID string) ([]map[string]any, error) {
 	rows, err := s.pool.Query(ctx, `SELECT jsonb_build_object('id',id,'name',name,'prefix',prefix,'is_active',true) FROM service_profiles WHERE company_id=$1 AND is_active ORDER BY name,id`, companyID)
 	if err != nil {

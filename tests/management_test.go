@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -772,6 +773,104 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	if len(seen) != 10 {
 		t.Fatalf("created %d concurrent requests", len(seen))
 	}
+	// T37: company lists page, search, filter and sort on the server.
+	type page struct {
+		Items    []map[string]any `json:"items"`
+		Page     int              `json:"page"`
+		PageSize int              `json:"page_size"`
+		Total    int              `json:"total"`
+	}
+	getPage := func(path, token string) page {
+		t.Helper()
+		response := httpJSON(t, handler, http.MethodGet, path, token, "")
+		if response.Code != 200 {
+			t.Fatalf("GET %s %d %s", path, response.Code, response.Body.String())
+		}
+		var body page
+		_ = json.Unmarshal(response.Body.Bytes(), &body)
+		return body
+	}
+	names := func(p page, key string) []string {
+		out := []string{}
+		for _, item := range p.Items {
+			out = append(out, item[key].(string))
+		}
+		return out
+	}
+	cbase := "/api/v1/companies/" + companyID
+	if byMobile := getPage(cbase+"/customers?q=00555", ownerToken); byMobile.Total != 1 || byMobile.Items[0]["name"] != "Customer" {
+		t.Fatalf("customer search by mobile %+v", byMobile)
+	}
+	if spaced := getPage(cbase+"/customers?q=9876500555", ownerToken); spaced.Total != 1 {
+		t.Fatalf("customer search ignoring spaces %+v", spaced)
+	}
+	if literal := getPage(cbase+"/customers?q=%25", ownerToken); literal.Total != 0 {
+		t.Fatalf("%% must match literally, got %d", literal.Total)
+	}
+	allCustomers := getPage(cbase+"/customers?page_size=100", ownerToken)
+	firstPage := getPage(cbase+"/customers?page_size=1&sort=name&order=desc", ownerToken)
+	secondPage := getPage(cbase+"/customers?page=2&page_size=1&sort=name&order=desc", ownerToken)
+	if allCustomers.Total < 2 || firstPage.Total != allCustomers.Total || len(firstPage.Items) != 1 || len(secondPage.Items) != 1 || firstPage.PageSize != 1 || secondPage.Page != 2 ||
+		strings.ToLower(firstPage.Items[0]["name"].(string)) < strings.ToLower(secondPage.Items[0]["name"].(string)) {
+		t.Fatalf("customer paging %+v / %+v", firstPage, secondPage)
+	}
+	if users := getPage(cbase+"/users?role=USER", ownerToken); !slices.Contains(names(users, "name"), "Operator") || slices.Contains(names(users, "name"), "Owner") {
+		t.Fatalf("users role filter %v", names(users, "name"))
+	}
+	for _, shop := range []string{`{"shop_name":"Everywhere Repairs"}`, `{"shop_name":"Toner Lab","profile_id":"` + refillID + `"}`} {
+		if created := httpJSON(t, handler, http.MethodPost, cbase+"/out-store-shops", ownerToken, shop); created.Code != 201 {
+			t.Fatalf("shop %s %d", shop, created.Code)
+		}
+	}
+	// A profile's shops include the ones available to every profile.
+	if jobCardShops := names(getPage(cbase+"/out-store-shops?status=ACTIVE&profile_id="+jobCardID, ownerToken), "shop_name"); !slices.Contains(jobCardShops, "Vendor") || !slices.Contains(jobCardShops, "Everywhere Repairs") || slices.Contains(jobCardShops, "Toner Lab") {
+		t.Fatalf("shops for Job Card %v", jobCardShops)
+	}
+	if products := getPage(cbase+"/products?profile_id="+refillID, ownerToken); slices.Contains(names(products, "name"), "Laptop") {
+		t.Fatalf("Refill products include Job Card ones %v", names(products, "name"))
+	}
+	fields := getPage(cbase+"/service-profiles/"+jobCardID+"/fields?enabled=true&page_size=5", ownerToken)
+	disabled := getPage(cbase+"/service-profiles/"+jobCardID+"/fields?enabled=false", ownerToken)
+	allFields := getPage(cbase+"/service-profiles/"+jobCardID+"/fields?page_size=100", ownerToken)
+	if allFields.Total != 16 || disabled.Total == 0 || fields.Total+disabled.Total != 16 || len(fields.Items) != 5 || fields.Items[0]["key"] != "jc_attendedby" {
+		t.Fatalf("fields paging %d+%d of %d, first %v", fields.Total, disabled.Total, allFields.Total, fields.Items[0]["key"])
+	}
+	if companies := getPage("/api/v1/companies?q=beta", rootToken); companies.Total != 1 || companies.Items[0]["name"] != "Beta" {
+		t.Fatalf("company search %+v", companies)
+	}
+	if suspended := getPage("/api/v1/companies?status=SUSPENDED", rootToken); suspended.Total != 0 {
+		t.Fatalf("suspended companies %+v", suspended)
+	}
+	for path, want := range map[string]string{
+		cbase + "/customers?sort=price":       "sort",
+		cbase + "/staff?status=GONE":          "status",
+		cbase + "/customers?colour=red":       "colour",
+		cbase + "/products?profile_id=nope":   "profile_id",
+		cbase + "/staff-roles?order=sideways": "order",
+	} {
+		if bad := httpJSON(t, handler, http.MethodGet, path, ownerToken, ""); bad.Code != 400 || !strings.Contains(bad.Body.String(), `"`+want+`"`) {
+			t.Fatalf("GET %s=%d %s", path, bad.Code, bad.Body.String())
+		}
+	}
+
+	// T38: Out-Store rows carry the record, customer and shop; search finds them.
+	outRows := getPage(outPath+"?q="+inlineBody["request_no"].(string), ownerToken)
+	if outRows.Total == 0 {
+		t.Fatalf("Out-Store search by record number %+v", outRows)
+	}
+	for _, row := range outRows.Items {
+		if row["request_no"] != inlineBody["request_no"] || row["customer_name"] != "Customer" || row["customer_contact"] != "98765 00555" || row["shop_name"] != "Vendor" || row["profile_name"] != "Job Card" || row["overdue"] == nil {
+			t.Fatalf("Out-Store row %v", row)
+		}
+	}
+	if byMobile := getPage(outPath+"?q=98765-00555", ownerToken); byMobile.Total != outRows.Total {
+		t.Fatalf("Out-Store search by mobile %d vs %d", byMobile.Total, outRows.Total)
+	}
+	outDetail := httpJSON(t, handler, http.MethodGet, outPath+"/"+outID, ownerToken, "")
+	if outDetail.Code != 200 || !strings.Contains(outDetail.Body.String(), `"shop_name":"Vendor"`) {
+		t.Fatalf("Out-Store detail %d %s", outDetail.Code, outDetail.Body.String())
+	}
+
 	forbidden := httpJSON(t, handler, http.MethodPatch, "/api/v1/companies/"+companyID, ownerToken, `{"status":"SUSPENDED"}`)
 	if forbidden.Code != 403 {
 		t.Fatalf("admin changed status: %d", forbidden.Code)

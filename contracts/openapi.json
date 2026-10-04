@@ -474,7 +474,7 @@
         "x-roles": [
           "SUPER_ADMIN"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -1054,7 +1054,7 @@
           "SUPER_ADMIN",
           "ADMIN"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -1550,7 +1550,7 @@
           "ADMIN",
           "USER"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -2154,7 +2154,7 @@
           "ADMIN",
           "USER"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -2769,7 +2769,7 @@
           "ADMIN",
           "USER"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -3214,7 +3214,7 @@
           "ADMIN",
           "USER"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -3705,7 +3705,7 @@
           "ADMIN",
           "USER"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -4196,7 +4196,7 @@
           "ADMIN",
           "USER"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -4379,7 +4379,8 @@
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "description": "Shops serving this profile, including shops available to every profile"
           }
         ]
       },
@@ -4687,7 +4688,7 @@
           "ADMIN",
           "USER"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -5172,7 +5173,7 @@
           "ADMIN",
           "USER"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -5914,7 +5915,7 @@
           "ADMIN",
           "USER"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -6547,7 +6548,7 @@
           "ADMIN",
           "USER"
         ],
-        "description": "See T01 requirements for field ownership, tenant validation and lifecycle rules.",
+        "description": "Paged on the server (T37): q searches the list's text columns (mobile numbers also by digits), other documented parameters filter, and unknown parameters return 400.",
         "responses": {
           "200": {
             "description": "Success",
@@ -8571,6 +8572,14 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Record number, customer name, mobile (digits match ignoring spaces) or shop name"
           }
         ]
       },
@@ -8733,7 +8742,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OutStoreEntry"
+                  "$ref": "#/components/schemas/OutStoreEntryView"
                 }
               }
             }
@@ -15211,7 +15220,7 @@
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/OutStoreEntry"
+              "$ref": "#/components/schemas/OutStoreEntryView"
             },
             "maxItems": 100
           },
@@ -16275,6 +16284,141 @@
         "required": [
           "items"
         ]
+      },
+      "OutStoreEntryView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "company_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "service_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shop_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sent_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,9})(\\.[0-9]{1,2})?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "remarks": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "SENT",
+              "RECEIVED_BACK"
+            ]
+          },
+          "received_back_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_no": {
+            "type": "string"
+          },
+          "profile_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_name": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customer_name": {
+            "type": "string"
+          },
+          "customer_contact": {
+            "type": "string"
+          },
+          "shop_name": {
+            "type": "string"
+          },
+          "shop_contact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "overdue": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "company_id",
+          "service_request_id",
+          "shop_id",
+          "sent_date",
+          "due_date",
+          "price",
+          "remarks",
+          "status",
+          "received_back_at",
+          "request_no",
+          "profile_id",
+          "profile_name",
+          "customer_id",
+          "customer_name",
+          "customer_contact",
+          "shop_name",
+          "shop_contact",
+          "overdue"
+        ],
+        "description": "An Out-Store entry with the record, customer and shop shown on the Out-Store screen (T38). overdue is true while the entry is at the shop past its due date."
       }
     },
     "responses": {

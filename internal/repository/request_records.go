@@ -101,7 +101,7 @@ func requestConditions(f RequestListFilter) []requestCondition {
 		if digits := onlyDigits(f.Q); len(digits) >= 3 {
 			search += " OR regexp_replace(c.contact,'[^0-9]','','g') LIKE '%" + digits + "%'"
 		}
-		add(search+")", "%"+f.Q+"%", "")
+		add(search+")", likeContains(f.Q), "")
 	}
 	return conditions
 }

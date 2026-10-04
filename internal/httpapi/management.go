@@ -100,12 +100,9 @@ func companiesHandler(auth *service.AuthService, store *repository.CatalogStore,
 		}
 		switch r.Method {
 		case http.MethodGet:
-			items, err := store.ListCompanies(r.Context())
-			if err != nil {
-				writeManagementError(w, err, logger)
-				return
-			}
-			writeList(w, items)
+			writePage(w, r, logger, func(q repository.ListQuery) ([]map[string]any, int, error) {
+				return store.ListPage(r.Context(), "companies", "", "", q)
+			})
 		case http.MethodPost:
 			var body struct {
 				Name    string `json:"name"`
@@ -209,12 +206,9 @@ func collectionHandler(auth *service.AuthService, store *repository.CatalogStore
 		}
 		switch r.Method {
 		case http.MethodGet:
-			items, err := store.List(r.Context(), resource, cid, "")
-			if err != nil {
-				writeManagementError(w, err, logger)
-				return
-			}
-			writeList(w, items)
+			writePage(w, r, logger, func(q repository.ListQuery) ([]map[string]any, int, error) {
+				return store.ListPage(r.Context(), resource, cid, "", q)
+			})
 		case http.MethodPost:
 			var v map[string]any
 			if !decodeJSON(w, r, &v) {
@@ -326,12 +320,13 @@ func nestedCollectionHandler(auth *service.AuthService, store *repository.Catalo
 			return
 		}
 		if r.Method == http.MethodGet {
-			items, err := store.List(r.Context(), resource, cid, pid)
-			if err != nil {
+			if _, err := store.Get(r.Context(), "service-profiles", cid, "", pid); err != nil {
 				writeManagementError(w, err, logger)
 				return
 			}
-			writeList(w, items)
+			writePage(w, r, logger, func(q repository.ListQuery) ([]map[string]any, int, error) {
+				return store.ListPage(r.Context(), resource, cid, pid, q)
+			})
 			return
 		}
 		if r.Method == http.MethodPost {
@@ -386,7 +381,9 @@ func nestedItemHandler(auth *service.AuthService, store *repository.CatalogStore
 			// Statuses are deleted when unused (T32); fields are disabled.
 			remove := store.Disable
 			if resource == "statuses" {
-				remove = func(ctx context.Context, _ string, cid, pid, id string) error { return store.DeleteStatus(ctx, cid, pid, id) }
+				remove = func(ctx context.Context, _ string, cid, pid, id string) error {
+					return store.DeleteStatus(ctx, cid, pid, id)
+				}
 			}
 			if err := remove(r.Context(), resource, cid, pid, id); err != nil {
 				writeManagementError(w, err, logger)
@@ -743,7 +740,7 @@ func outStoreCollectionHandler(auth *service.AuthService, store *repository.Cata
 				writeManagementError(w, service.Invalid("status must be SENT or RECEIVED_BACK."), logger)
 				return
 			}
-			filter := repository.OutStoreFilter{Page: page, PageSize: size, Order: order, ServiceRequestID: q.Get("service_request_id"), Status: status, ShopID: q.Get("shop_id")}
+			filter := repository.OutStoreFilter{Page: page, PageSize: size, Order: order, ServiceRequestID: q.Get("service_request_id"), Status: status, ShopID: q.Get("shop_id"), Q: q.Get("q")}
 			items, total, err := store.ListOutStore(r.Context(), companyID, filter)
 			if err != nil {
 				writeManagementError(w, err, logger)
@@ -993,7 +990,7 @@ func standbyIssueListHandler(auth *service.AuthService, store *repository.Catalo
 			writeManagementError(w, err, logger)
 			return
 		}
-		writeList(w, items)
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	}
 }
 
@@ -1069,6 +1066,7 @@ func roles(resource string) ([]string, []string) {
 	}
 	return []string{"ADMIN", "USER"}, []string{"ADMIN"}
 }
+
 // prepareCredentials normalizes email and phone. Email is required for user
 // accounts; for customers and staff it is optional and empty clears it.
 func prepareCredentials(v map[string]any, emailRequired bool) error {
@@ -1120,6 +1118,40 @@ func prepareCredentials(v map[string]any, emailRequired bool) error {
 	delete(v, "password")
 	return nil
 }
+
+// writePage serves a paged list: page, page_size, q, sort and order, with any
+// other query parameter treated as a filter and validated by the list (T37).
+func writePage(w http.ResponseWriter, r *http.Request, logger *slog.Logger, list func(repository.ListQuery) ([]map[string]any, int, error)) {
+	page, size, err := parsePage(r)
+	if err != nil {
+		writeManagementError(w, err, logger)
+		return
+	}
+	query := repository.ListQuery{Page: page, PageSize: size, Filters: map[string]string{}}
+	for name, values := range r.URL.Query() {
+		value := values[len(values)-1]
+		switch name {
+		case "page", "page_size":
+		case "q":
+			query.Q = value
+		case "sort":
+			query.Sort = value
+		case "order":
+			query.Order = value
+		default:
+			if value != "" {
+				query.Filters[name] = value
+			}
+		}
+	}
+	items, total, err := list(query)
+	if err != nil {
+		writeManagementError(w, err, logger)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "page": page, "page_size": size, "total": total})
+}
+
 func writeList(w http.ResponseWriter, items []map[string]any) {
 	writeJSON(w, 200, map[string]any{"items": items, "page": 1, "page_size": 25, "total": len(items)})
 }

@@ -22,21 +22,43 @@ type OutStorePatch struct {
 type OutStoreFilter struct {
 	Page, PageSize                          int
 	Order, ServiceRequestID, Status, ShopID string
+	Q                                       string // record number, customer, mobile or shop
 }
 
 const outStoreJSON = `to_jsonb(e)||jsonb_build_object('price',e.price::text)`
 
+// outStoreViewJSON adds what the Out-Store screen shows next to each entry
+// (T38): record number and profile, customer name and mobile, shop name and
+// contact, and whether the entry is overdue at the shop.
+const outStoreViewJSON = outStoreJSON + `||jsonb_build_object('request_no',r.request_no,'profile_id',r.profile_id,'profile_name',p.name,'customer_id',c.id,'customer_name',c.name,'customer_contact',c.contact,'shop_name',sh.shop_name,'shop_contact',sh.contact,'overdue',COALESCE(e.status='SENT' AND e.due_date<current_date,false))`
+
+const outStoreViewFrom = ` FROM out_store_entries e
+ JOIN service_requests r ON r.company_id=e.company_id AND r.id=e.service_request_id
+ JOIN service_profiles p ON p.company_id=r.company_id AND p.id=r.profile_id
+ JOIN customers c ON c.company_id=r.company_id AND c.id=r.customer_id
+ JOIN out_store_shops sh ON sh.company_id=e.company_id AND sh.id=e.shop_id`
+
 func (s *CatalogStore) ListOutStore(ctx context.Context, companyID string, f OutStoreFilter) ([]map[string]any, int, error) {
-	where := []string{"company_id=$1"}
+	where := []string{"e.company_id=$1"}
 	args := []any{companyID}
-	for _, filter := range []struct{ column, value string }{{"service_request_id", f.ServiceRequestID}, {"status", f.Status}, {"shop_id", f.ShopID}} {
+	for _, filter := range []struct{ column, value string }{{"e.service_request_id", f.ServiceRequestID}, {"e.status", f.Status}, {"e.shop_id", f.ShopID}} {
 		if filter.value != "" {
 			args = append(args, filter.value)
 			where = append(where, fmt.Sprintf("%s=$%d", filter.column, len(args)))
 		}
 	}
+	if text := strings.TrimSpace(f.Q); text != "" {
+		args = append(args, likeContains(text))
+		n := len(args)
+		search := fmt.Sprintf("(r.request_no ILIKE $%d OR c.name ILIKE $%d OR c.contact ILIKE $%d OR sh.shop_name ILIKE $%d", n, n, n, n)
+		if digits := onlyDigits(text); len(digits) >= 3 {
+			args = append(args, "%"+digits+"%")
+			search += fmt.Sprintf(" OR regexp_replace(c.contact,'[^0-9]','','g') LIKE $%d", len(args))
+		}
+		where = append(where, search+")")
+	}
 	var total int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM out_store_entries WHERE `+strings.Join(where, " AND "), args...).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)`+outStoreViewFrom+` WHERE `+strings.Join(where, " AND "), args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	direction := "DESC"
@@ -44,7 +66,7 @@ func (s *CatalogStore) ListOutStore(ctx context.Context, companyID string, f Out
 		direction = "ASC"
 	}
 	args = append(args, f.PageSize, (f.Page-1)*f.PageSize)
-	rows, err := s.pool.Query(ctx, `SELECT `+outStoreJSON+` FROM out_store_entries e WHERE `+strings.Join(where, " AND ")+fmt.Sprintf(" ORDER BY sent_date %s,id %s LIMIT $%d OFFSET $%d", direction, direction, len(args)-1, len(args)), args...)
+	rows, err := s.pool.Query(ctx, `SELECT `+outStoreViewJSON+outStoreViewFrom+` WHERE `+strings.Join(where, " AND ")+fmt.Sprintf(" ORDER BY e.sent_date %s,e.id %s LIMIT $%d OFFSET $%d", direction, direction, len(args)-1, len(args)), args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -60,7 +82,7 @@ func (s *CatalogStore) ListOutStore(ctx context.Context, companyID string, f Out
 	return items, total, rows.Err()
 }
 func (s *CatalogStore) GetOutStore(ctx context.Context, companyID, id string) (map[string]any, error) {
-	return scanObject(s.pool.QueryRow(ctx, `SELECT `+outStoreJSON+` FROM out_store_entries e WHERE company_id=$1 AND id=$2`, companyID, id))
+	return scanObject(s.pool.QueryRow(ctx, `SELECT `+outStoreViewJSON+outStoreViewFrom+` WHERE e.company_id=$1 AND e.id=$2`, companyID, id))
 }
 
 func (s *CatalogStore) CreateOutStore(ctx context.Context, companyID, actorID string, input OutStoreInput) (map[string]any, error) {
