@@ -20,6 +20,7 @@ docker.env
 
 # Runtime logs
 /logs/
+/logs/*
 /logs/*.log
 
 
