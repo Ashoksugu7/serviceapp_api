@@ -51,7 +51,7 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	for _, name := range []string{"000001_company_master_data.up.sql", "000002_service_transactions.up.sql", "000003_authentication.up.sql", "000004_user_phone.up.sql", "000005_must_change_password.up.sql", "000006_password_reset_tokens.up.sql", "000007_record_history_events.up.sql", "000008_customer_mobile_identity.up.sql", "000009_drop_company_code.up.sql"} {
+	for _, name := range []string{"000001_company_master_data.up.sql", "000002_service_transactions.up.sql", "000003_authentication.up.sql", "000004_user_phone.up.sql", "000005_must_change_password.up.sql", "000006_password_reset_tokens.up.sql", "000007_record_history_events.up.sql", "000008_customer_mobile_identity.up.sql", "000009_drop_company_code.up.sql", "000010_product_service_profiles.up.sql", "000011_service_profile_catalog_entry_mode.up.sql", "000012_standby_requires_service_record.up.sql"} {
 		sql, err := os.ReadFile(filepath.Join("..", "migrations", name))
 		if err != nil {
 			t.Fatal(err)
@@ -95,7 +95,7 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	}
 	_ = json.Unmarshal(profiles.Body.Bytes(), &list)
 	// T30: onboarding creates one blank "Service" profile and no staff roles.
-	if len(list.Items) != 1 || list.Items[0]["name"] != "Service" || list.Items[0]["prefix"] != "S" {
+	if len(list.Items) != 1 || list.Items[0]["name"] != "Service" || list.Items[0]["prefix"] != "S" || list.Items[0]["catalog_entry_mode"] != "MASTERS_ONLY" {
 		t.Fatalf("onboarded profiles %s", profiles.Body.String())
 	}
 	if roles := httpJSON(t, handler, http.MethodGet, "/api/v1/companies/"+companyID+"/staff-roles", ownerToken, ""); roles.Code != 200 || !strings.Contains(roles.Body.String(), `"items":[]`) {
@@ -352,6 +352,10 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	}
 	var productBody map[string]any
 	_ = json.Unmarshal(product.Body.Bytes(), &productBody)
+	sharedProduct := httpJSON(t, handler, http.MethodPatch, "/api/v1/companies/"+companyID+"/products/"+productBody["id"].(string), ownerToken, `{"profile_ids":["`+jobCardID+`","`+refillID+`"]}`)
+	if sharedProduct.Code != 200 || !strings.Contains(sharedProduct.Body.String(), `"profile_ids"`) {
+		t.Fatalf("product multi-profile assignment %d %s", sharedProduct.Code, sharedProduct.Body.String())
+	}
 	linkedEdit := httpJSON(t, handler, http.MethodPatch, detailPath, ownerToken, `{"form_data":{"jc_product":"`+productBody["id"].(string)+`"}}`)
 	if linkedEdit.Code != 200 {
 		t.Fatalf("linked edit %d %s", linkedEdit.Code, linkedEdit.Body.String())
@@ -470,18 +474,12 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	if issuedMaster.Code != 409 {
 		t.Fatalf("master set issued=%d %s", issuedMaster.Code, issuedMaster.Body.String())
 	}
-	mismatchProduct := httpJSON(t, handler, http.MethodPost, "/api/v1/companies/"+companyID+"/products", ownerToken, `{"profile_id":"`+refillID+`","name":"Toner"}`)
-	if mismatchProduct.Code != 201 {
-		t.Fatalf("mismatch product %d %s", mismatchProduct.Code, mismatchProduct.Body.String())
+	missingRecord := httpJSON(t, handler, http.MethodPost, standbyPath+"/"+standbyID+"/issue", ownerToken, `{"customer_id":"`+customerID+`","issued_date":"2026-09-20"}`)
+	if missingRecord.Code != 400 || !strings.Contains(missingRecord.Body.String(), "service_request_id") {
+		t.Fatalf("standby issue without service record=%d %s", missingRecord.Code, missingRecord.Body.String())
 	}
-	var mismatchProductBody map[string]any
-	_ = json.Unmarshal(mismatchProduct.Body.Bytes(), &mismatchProductBody)
-	badIssue := httpJSON(t, handler, http.MethodPost, standbyPath+"/"+standbyID+"/issue", ownerToken, `{"customer_id":"`+customerID+`","service_request_id":"`+requestID+`","issued_date":"2026-09-20","received_product_id":"`+mismatchProductBody["id"].(string)+`"}`)
-	if badIssue.Code != 409 {
-		t.Fatalf("profile-mismatched standby issue=%d %s", badIssue.Code, badIssue.Body.String())
-	}
-	issued := httpJSON(t, handler, http.MethodPost, standbyPath+"/"+standbyID+"/issue", ownerToken, `{"customer_id":"`+customerID+`","service_request_id":"`+requestID+`","issued_date":"2026-09-20","due_date":"2026-09-25","notes":"Temporary device","received_product_id":"`+productBody["id"].(string)+`"}`)
-	if issued.Code != 201 || !strings.Contains(issued.Body.String(), `"status":"ISSUED"`) || !strings.Contains(issued.Body.String(), `"notes":"Temporary device"`) {
+	issued := httpJSON(t, handler, http.MethodPost, standbyPath+"/"+standbyID+"/issue", ownerToken, `{"customer_id":"`+customerID+`","service_request_id":"`+requestID+`","issued_date":"2026-09-20","due_date":"2026-09-25","notes":"Temporary device"}`)
+	if issued.Code != 201 || !strings.Contains(issued.Body.String(), `"status":"ISSUED"`) || !strings.Contains(issued.Body.String(), `"notes":"Temporary device"`) || !strings.Contains(issued.Body.String(), `"received_product_id":"`+productBody["id"].(string)+`"`) {
 		t.Fatalf("standby issue %d %s", issued.Code, issued.Body.String())
 	}
 	var issuedBody struct {
@@ -489,7 +487,7 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	}
 	_ = json.Unmarshal(issued.Body.Bytes(), &issuedBody)
 	firstIssueID := issuedBody.Issue["id"].(string)
-	duplicateIssue := httpJSON(t, handler, http.MethodPost, standbyPath+"/"+standbyID+"/issue", ownerToken, `{"customer_id":"`+customerID+`","issued_date":"2026-09-21"}`)
+	duplicateIssue := httpJSON(t, handler, http.MethodPost, standbyPath+"/"+standbyID+"/issue", ownerToken, `{"customer_id":"`+customerID+`","service_request_id":"`+requestID+`","issued_date":"2026-09-21"}`)
 	if duplicateIssue.Code != 409 {
 		t.Fatalf("duplicate standby issue=%d %s", duplicateIssue.Code, duplicateIssue.Body.String())
 	}
@@ -506,7 +504,7 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	if retryReturn.Code != 200 || !strings.Contains(retryReturn.Body.String(), `"status":"AVAILABLE"`) {
 		t.Fatalf("standby return retry %d %s", retryReturn.Code, retryReturn.Body.String())
 	}
-	reissued := httpJSON(t, handler, http.MethodPost, standbyPath+"/"+standbyID+"/issue", ownerToken, `{"customer_id":"`+customerID+`","issued_date":"2026-09-26"}`)
+	reissued := httpJSON(t, handler, http.MethodPost, standbyPath+"/"+standbyID+"/issue", ownerToken, `{"customer_id":"`+customerID+`","service_request_id":"`+requestID+`","issued_date":"2026-09-26"}`)
 	if reissued.Code != 201 {
 		t.Fatalf("standby reissue %d %s", reissued.Code, reissued.Body.String())
 	}
@@ -540,7 +538,7 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 		t.Fatalf("issues for unknown item=%d", missingItem.Code)
 	}
 	issuesPath := "/api/v1/companies/" + companyID + "/standby-issues"
-	for query, want := range map[string]int{"?contact=00555": 2, "?contact=9876500555&state=returned": 2, "?contact=00555&state=open": 0, "?contact=11111": 0, "?service_request_id=" + requestID: 1, "?standby_item_id=" + standbyID + "&order=asc": 2} {
+	for query, want := range map[string]int{"?contact=00555": 2, "?contact=9876500555&state=returned": 2, "?contact=00555&state=open": 0, "?contact=11111": 0, "?service_request_id=" + requestID: 2, "?standby_item_id=" + standbyID + "&order=asc": 2} {
 		list := httpJSON(t, handler, http.MethodGet, issuesPath+query, operatorToken, "")
 		var listBody struct {
 			Items []map[string]any `json:"items"`
@@ -826,8 +824,8 @@ func TestManagementHTTPWorkflow(t *testing.T) {
 	if jobCardShops := names(getPage(cbase+"/out-store-shops?status=ACTIVE&profile_id="+jobCardID, ownerToken), "shop_name"); !slices.Contains(jobCardShops, "Vendor") || !slices.Contains(jobCardShops, "Everywhere Repairs") || slices.Contains(jobCardShops, "Toner Lab") {
 		t.Fatalf("shops for Job Card %v", jobCardShops)
 	}
-	if products := getPage(cbase+"/products?profile_id="+refillID, ownerToken); slices.Contains(names(products, "name"), "Laptop") {
-		t.Fatalf("Refill products include Job Card ones %v", names(products, "name"))
+	if products := getPage(cbase+"/products?profile_id="+refillID, ownerToken); !slices.Contains(names(products, "name"), "Laptop") {
+		t.Fatalf("Refill products exclude multi-profile Laptop %v", names(products, "name"))
 	}
 	fields := getPage(cbase+"/service-profiles/"+jobCardID+"/fields?enabled=true&page_size=5", ownerToken)
 	disabled := getPage(cbase+"/service-profiles/"+jobCardID+"/fields?enabled=false", ownerToken)

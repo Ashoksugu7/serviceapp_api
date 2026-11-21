@@ -49,11 +49,11 @@ var catalogSpecs = map[string]resourceSpec{
 	"customers":        {"customers", "to_jsonb(t)", cols("name,contact,email,address"), cols("name,contact,email,address"), false},
 	"staff":            {"staff", `to_jsonb(t)||jsonb_build_object('role_ids',COALESCE((SELECT jsonb_agg(a.role_id ORDER BY a.role_id) FROM staff_role_assignments a WHERE a.company_id=t.company_id AND a.staff_id=t.id),'[]'::jsonb))`, cols("name,contact,email,specialization,status,role_ids"), cols("name,contact,email,specialization,status,role_ids"), false},
 	"staff-roles":      {"staff_roles", "to_jsonb(t)", cols("name"), cols("name"), false},
-	"products":         {"products", "to_jsonb(t)", cols("profile_id,name,brand,category,status"), cols("name,brand,category,status"), false},
+	"products":         {"products", `to_jsonb(t)||jsonb_build_object('profile_ids',COALESCE((SELECT jsonb_agg(pp.profile_id ORDER BY pp.profile_id) FROM product_service_profiles pp WHERE pp.company_id=t.company_id AND pp.product_id=t.id),'[]'::jsonb))`, cols("profile_ids,name,brand,category,status"), cols("profile_ids,name,brand,category,status"), false},
 	"charges":          {"charges", "to_jsonb(t)", cols("profile_id,name,description,status"), cols("name,description,status"), false},
 	"out-store-shops":  {"out_store_shops", "to_jsonb(t)", cols("profile_id,shop_name,contact_person,contact,address,status"), cols("shop_name,contact_person,contact,address,status"), false},
 	"standby-items":    {"standby_items", `to_jsonb(t)||jsonb_build_object('price',t.price::text)`, cols("name,serial_no,category,price"), cols("name,serial_no,category,price,status"), false},
-	"service-profiles": {"service_profiles", "to_jsonb(t)", cols("name,prefix"), cols("name,prefix,out_store_enabled,is_active,core_labels"), false},
+	"service-profiles": {"service_profiles", "to_jsonb(t)", cols("name,prefix"), cols("name,prefix,out_store_enabled,is_active,core_labels,catalog_entry_mode"), false},
 	"fields":           {"service_profile_fields", `to_jsonb(t)-'field_key'-'field_type'||jsonb_build_object('key',t.field_key,'type',t.field_type)`, cols("key:field_key,label,type:field_type,required,enabled,sort_order,config"), cols("label,type:field_type,required,enabled,sort_order,config"), true},
 	"statuses":         {"service_profile_statuses", `to_jsonb(t)-'is_initial'-'is_closed'||jsonb_build_object('initial',t.is_initial,'closed',t.is_closed)`, cols("name,sort_order,initial:is_initial,closed:is_closed,enabled"), cols("name,sort_order,initial:is_initial,closed:is_closed,enabled"), true},
 }
@@ -111,6 +111,9 @@ func (s *CatalogStore) Get(ctx context.Context, resource, companyID, profileID, 
 }
 
 func (s *CatalogStore) Create(ctx context.Context, resource, companyID, profileID string, values map[string]any) (map[string]any, error) {
+	if resource == "products" {
+		return s.createProduct(ctx, companyID, values)
+	}
 	spec := catalogSpecs[resource]
 	if err := validateCatalogValues(resource, values); err != nil {
 		return nil, err
@@ -156,6 +159,9 @@ func (s *CatalogStore) insert(ctx context.Context, spec resourceSpec, companyID,
 }
 
 func (s *CatalogStore) Update(ctx context.Context, resource, companyID, profileID, id string, values map[string]any) (map[string]any, error) {
+	if resource == "products" {
+		return s.updateProduct(ctx, companyID, id, values)
+	}
 	if err := validateCatalogValues(resource, values); err != nil {
 		return nil, err
 	}
@@ -187,6 +193,11 @@ func (s *CatalogStore) Update(ctx context.Context, resource, companyID, profileI
 		}
 	}
 	if resource == "service-profiles" {
+		if mode, changes := values["catalog_entry_mode"]; changes {
+			if text, ok := mode.(string); !ok || (text != "MASTERS_ONLY" && text != "SERVICE_ENTRY") {
+				return nil, service.FieldErrors{"catalog_entry_mode": "must be MASTERS_ONLY or SERVICE_ENTRY"}
+			}
+		}
 		if raw, changes := values["core_labels"]; changes {
 			labels, ok := raw.(map[string]any)
 			if !ok || len(labels) == 0 {
@@ -285,6 +296,9 @@ func validateCatalogValues(resource string, values map[string]any) error {
 	if resource != "products" {
 		return nil
 	}
+	if err := normalizeProductProfiles(values, false); err != nil {
+		return err
+	}
 	if raw, supplied := values["status"]; supplied {
 		status, ok := raw.(string)
 		if !ok || (status != "ACTIVE" && status != "DISCONTINUED") {
@@ -292,6 +306,198 @@ func validateCatalogValues(resource string, values map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// normalizeProductProfiles accepts the former single-profile field while old
+// API clients are upgraded, then validates the multi-profile assignment.
+func normalizeProductProfiles(values map[string]any, creating bool) error {
+	if legacy, sent := values["profile_id"]; sent {
+		if _, alsoSent := values["profile_ids"]; alsoSent {
+			return service.FieldErrors{"profile_ids": "use profile_ids only"}
+		}
+		id, ok := legacy.(string)
+		if !ok {
+			return service.FieldErrors{"profile_ids": "must contain service profile IDs"}
+		}
+		values["profile_ids"] = []any{id}
+		delete(values, "profile_id")
+	}
+	raw, sent := values["profile_ids"]
+	if !sent {
+		if creating {
+			return service.FieldErrors{"profile_ids": "select at least one service profile"}
+		}
+		return nil
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		if ids, stringsOK := raw.([]string); stringsOK {
+			list = make([]any, len(ids))
+			for i, id := range ids {
+				list[i] = id
+			}
+		} else {
+			return service.FieldErrors{"profile_ids": "must be a list of service profile IDs"}
+		}
+	}
+	if len(list) == 0 {
+		return service.FieldErrors{"profile_ids": "select at least one service profile"}
+	}
+	ids := make([]string, 0, len(list))
+	seen := map[string]bool{}
+	for _, rawID := range list {
+		id, ok := rawID.(string)
+		if !ok || !uuidText.MatchString(id) || seen[id] {
+			return service.FieldErrors{"profile_ids": "must contain distinct service profile IDs"}
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	values["profile_ids"] = ids
+	return nil
+}
+
+func productProfileIDs(values map[string]any) []string {
+	ids, _ := values["profile_ids"].([]string)
+	return ids
+}
+
+func (s *CatalogStore) validateProductProfiles(ctx context.Context, tx pgx.Tx, companyID string, ids []string) error {
+	var count int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM service_profiles WHERE company_id=$1 AND id=ANY($2::uuid[]) AND is_active`, companyID, ids).Scan(&count); err != nil {
+		return err
+	}
+	if count != len(ids) {
+		return service.FieldErrors{"profile_ids": "must reference active service profiles in this company"}
+	}
+	return nil
+}
+
+func (s *CatalogStore) createProduct(ctx context.Context, companyID string, values map[string]any) (map[string]any, error) {
+	if err := normalizeProductProfiles(values, true); err != nil {
+		return nil, err
+	}
+	if err := validateCatalogValues("products", values); err != nil {
+		return nil, err
+	}
+	profiles := productProfileIDs(values)
+	delete(values, "profile_ids")
+	spec := catalogSpecs["products"]
+	keys := sortedAllowed(values, spec.create)
+	if len(keys) != len(values) {
+		return nil, fieldsError(values, spec.create)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := s.validateProductProfiles(ctx, tx, companyID, profiles); err != nil {
+		return nil, err
+	}
+	columns, placeholders, args := []string{"company_id", "profile_id"}, []string{"$1", "$2"}, []any{companyID, profiles[0]}
+	for _, key := range keys {
+		columns = append(columns, spec.create[key])
+		args = append(args, values[key])
+		placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)))
+	}
+	var id string
+	if err := tx.QueryRow(ctx, fmt.Sprintf("INSERT INTO products(%s) VALUES(%s) RETURNING id::text", strings.Join(columns, ","), strings.Join(placeholders, ",")), args...).Scan(&id); err != nil {
+		return nil, err
+	}
+	if err := s.replaceProductProfiles(ctx, tx, companyID, id, profiles); err != nil {
+		return nil, err
+	}
+	item, err := s.getProduct(ctx, tx, companyID, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+func (s *CatalogStore) updateProduct(ctx context.Context, companyID, id string, values map[string]any) (map[string]any, error) {
+	if err := validateCatalogValues("products", values); err != nil {
+		return nil, err
+	}
+	profiles, profilesChanged := productProfileIDs(values), false
+	if _, profilesChanged = values["profile_ids"]; profilesChanged {
+		delete(values, "profile_ids")
+	}
+	spec := catalogSpecs["products"]
+	keys := sortedAllowed(values, spec.update)
+	if len(keys) != len(values) {
+		return nil, fieldsError(values, spec.update)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var currentProfile string
+	if err := tx.QueryRow(ctx, `SELECT profile_id::text FROM products WHERE company_id=$1 AND id=$2 FOR UPDATE`, companyID, id).Scan(&currentProfile); errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	if profilesChanged {
+		if err := s.validateProductProfiles(ctx, tx, companyID, profiles); err != nil {
+			return nil, err
+		}
+		primary := profiles[0]
+		for _, profileID := range profiles {
+			if profileID == currentProfile {
+				primary = currentProfile
+				break
+			}
+		}
+		if _, err := tx.Exec(ctx, `UPDATE products SET profile_id=$1 WHERE company_id=$2 AND id=$3`, primary, companyID, id); err != nil {
+			return nil, err
+		}
+		if err := s.replaceProductProfiles(ctx, tx, companyID, id, profiles); err != nil {
+			return nil, err
+		}
+	}
+	if len(keys) > 0 {
+		args, sets := []any{}, []string{}
+		for _, key := range keys {
+			args = append(args, values[key])
+			sets = append(sets, fmt.Sprintf("%s=$%d", spec.update[key], len(args)))
+		}
+		args = append(args, companyID, id)
+		if _, err := tx.Exec(ctx, fmt.Sprintf("UPDATE products SET %s WHERE company_id=$%d AND id=$%d", strings.Join(sets, ","), len(args)-1, len(args)), args...); err != nil {
+			return nil, err
+		}
+	}
+	if !profilesChanged && len(keys) == 0 {
+		return nil, service.Invalid("Send at least one field to change.")
+	}
+	item, err := s.getProduct(ctx, tx, companyID, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+func (s *CatalogStore) replaceProductProfiles(ctx context.Context, tx pgx.Tx, companyID, productID string, profiles []string) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM product_service_profiles WHERE company_id=$1 AND product_id=$2`, companyID, productID); err != nil {
+		return err
+	}
+	for _, profileID := range profiles {
+		if _, err := tx.Exec(ctx, `INSERT INTO product_service_profiles(company_id,product_id,profile_id) VALUES($1,$2,$3)`, companyID, productID, profileID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *CatalogStore) getProduct(ctx context.Context, tx pgx.Tx, companyID, id string) (map[string]any, error) {
+	return scanObject(tx.QueryRow(ctx, "SELECT "+catalogSpecs["products"].read+" FROM products t WHERE company_id=$1 AND id=$2", companyID, id))
 }
 
 func (s *CatalogStore) saveStaff(ctx context.Context, companyID, id string, values map[string]any, creating bool) (map[string]any, error) {

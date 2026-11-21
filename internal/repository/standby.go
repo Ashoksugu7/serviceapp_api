@@ -12,8 +12,8 @@ import (
 )
 
 type StandbyIssueInput struct {
-	CustomerID, IssuedDate                      string
-	ServiceRequestID, DueDate, Notes, ProductID *string
+	CustomerID, IssuedDate           string
+	ServiceRequestID, DueDate, Notes *string
 }
 
 const standbyItemJSON = `to_jsonb(i)||jsonb_build_object('price',i.price::text)`
@@ -98,6 +98,9 @@ func (s *CatalogStore) ListStandbyIssueHistory(ctx context.Context, companyID st
 }
 
 func (s *CatalogStore) IssueStandbyItem(ctx context.Context, companyID, itemID, actorID string, input StandbyIssueInput) (map[string]any, error) {
+	if input.ServiceRequestID == nil || strings.TrimSpace(*input.ServiceRequestID) == "" {
+		return nil, service.FieldErrors{"service_request_id": "is required"}
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -125,41 +128,33 @@ func (s *CatalogStore) IssueStandbyItem(ctx context.Context, companyID, itemID, 
 		return nil, notFound("Customer not found in this company.")
 	}
 
-	var requestProfileID string
-	if input.ServiceRequestID != nil {
-		var requestCustomerID string
-		var closed bool
-		err := tx.QueryRow(ctx, `SELECT r.customer_id::text,r.profile_id::text,st.is_closed FROM service_requests r JOIN service_profile_statuses st ON st.company_id=r.company_id AND st.id=r.status_id WHERE r.company_id=$1 AND r.id=$2 FOR SHARE OF r`, companyID, *input.ServiceRequestID).Scan(&requestCustomerID, &requestProfileID, &closed)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, notFound("Linked service record not found in this company.")
-		}
-		if err != nil {
-			return nil, err
-		}
-		if requestCustomerID != input.CustomerID {
-			return nil, service.InvalidState("The linked record belongs to a different customer.")
-		}
-		if closed {
-			return nil, service.InvalidState("The linked record is closed. Link an open record or none.")
-		}
+	var requestProfileID, requestCustomerID string
+	var formDataRaw []byte
+	var closed bool
+	err = tx.QueryRow(ctx, `SELECT r.customer_id::text,r.profile_id::text,st.is_closed,r.form_data FROM service_requests r JOIN service_profile_statuses st ON st.company_id=r.company_id AND st.id=r.status_id WHERE r.company_id=$1 AND r.id=$2 FOR SHARE OF r`, companyID, *input.ServiceRequestID).Scan(&requestCustomerID, &requestProfileID, &closed, &formDataRaw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, notFound("Service record not found in this company.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if requestCustomerID != input.CustomerID {
+		return nil, service.InvalidState("The service record belongs to a different customer.")
+	}
+	if closed {
+		return nil, service.InvalidState("The service record is closed. Reopen it before issuing a stand-by item.")
 	}
 
-	if input.ProductID != nil {
-		var productProfileID string
-		err := tx.QueryRow(ctx, `SELECT profile_id::text FROM products WHERE company_id=$1 AND id=$2 FOR SHARE`, companyID, *input.ProductID).Scan(&productProfileID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-		if err != nil {
-			return nil, err
-		}
-		if input.ServiceRequestID != nil && productProfileID != requestProfileID {
-			return nil, service.InvalidState("The product received must belong to the linked record's profile.")
-		}
+	// Product received is owned by the service record, never chosen independently
+	// while lending a stand-by item. The first populated product field is the
+	// record's primary product (linked-product fields are single-select).
+	productID, err := serviceRecordProductID(ctx, tx, companyID, requestProfileID, formDataRaw)
+	if err != nil {
+		return nil, err
 	}
 
 	var issueRaw []byte
-	err = tx.QueryRow(ctx, `INSERT INTO standby_item_issues AS si(company_id,standby_item_id,customer_id,service_request_id,issued_date,due_date,notes,received_product_id,issued_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING to_jsonb(si)`, companyID, itemID, input.CustomerID, input.ServiceRequestID, input.IssuedDate, input.DueDate, input.Notes, input.ProductID, actorID).Scan(&issueRaw)
+	err = tx.QueryRow(ctx, `INSERT INTO standby_item_issues AS si(company_id,standby_item_id,customer_id,service_request_id,issued_date,due_date,notes,received_product_id,issued_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING to_jsonb(si)`, companyID, itemID, input.CustomerID, input.ServiceRequestID, input.IssuedDate, input.DueDate, input.Notes, productID, actorID).Scan(&issueRaw)
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +178,32 @@ func (s *CatalogStore) IssueStandbyItem(ctx context.Context, companyID, itemID, 
 		return nil, err
 	}
 	return result, nil
+}
+
+func serviceRecordProductID(ctx context.Context, tx pgx.Tx, companyID, profileID string, formDataRaw []byte) (*string, error) {
+	var formData map[string]any
+	if err := json.Unmarshal(formDataRaw, &formData); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `SELECT field_key FROM service_profile_fields WHERE company_id=$1 AND profile_id=$2 AND field_type='linked_product' ORDER BY sort_order,id`, companyID, profileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		productID, _ := formData[key].(string)
+		if strings.TrimSpace(productID) != "" {
+			return &productID, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 func (s *CatalogStore) ReturnStandbyItem(ctx context.Context, companyID, itemID, issueID, actorID string) (map[string]any, error) {

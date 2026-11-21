@@ -1,0 +1,1 @@
+ALTER TABLE standby_item_issues DROP CONSTRAINT standby_item_issues_service_request_required;

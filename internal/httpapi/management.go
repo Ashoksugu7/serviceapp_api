@@ -900,7 +900,6 @@ func standbyIssueHandler(auth *service.AuthService, store *repository.CatalogSto
 		IssuedDate       string  `json:"issued_date"`
 		DueDate          *string `json:"due_date"`
 		Notes            *string `json:"notes"`
-		ProductID        *string `json:"received_product_id"`
 	}
 	return func(w http.ResponseWriter, r *http.Request, p service.Principal) {
 		if r.Method != http.MethodPost {
@@ -920,6 +919,9 @@ func standbyIssueHandler(auth *service.AuthService, store *repository.CatalogSto
 		if body.CustomerID == "" {
 			fields["customer_id"] = "is required"
 		}
+		if body.ServiceRequestID == nil || strings.TrimSpace(*body.ServiceRequestID) == "" {
+			fields["service_request_id"] = "is required"
+		}
 		if _, err := time.Parse("2006-01-02", body.IssuedDate); err != nil {
 			fields["issued_date"] = "must be a date in YYYY-MM-DD format"
 		}
@@ -935,7 +937,7 @@ func standbyIssueHandler(auth *service.AuthService, store *repository.CatalogSto
 			writeManagementError(w, fields, logger)
 			return
 		}
-		result, err := store.IssueStandbyItem(r.Context(), companyID, r.PathValue("id"), p.Identity.User.ID, repository.StandbyIssueInput{CustomerID: body.CustomerID, ServiceRequestID: body.ServiceRequestID, IssuedDate: body.IssuedDate, DueDate: body.DueDate, Notes: body.Notes, ProductID: body.ProductID})
+		result, err := store.IssueStandbyItem(r.Context(), companyID, r.PathValue("id"), p.Identity.User.ID, repository.StandbyIssueInput{CustomerID: body.CustomerID, ServiceRequestID: body.ServiceRequestID, IssuedDate: body.IssuedDate, DueDate: body.DueDate, Notes: body.Notes})
 		if err != nil {
 			writeManagementError(w, err, logger)
 			return

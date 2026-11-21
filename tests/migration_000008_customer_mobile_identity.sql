@@ -87,6 +87,27 @@ BEGIN
     END IF;
 END $$;
 
+-- T39: an existing product is carried into the multi-profile mapping.
+CREATE TEMP TABLE t39_product AS
+WITH inserted AS (
+    INSERT INTO products(company_id,profile_id,name)
+    SELECT company_id, id, 'Laptop' FROM service_profiles WHERE name = 'Repair'
+    RETURNING company_id, id, profile_id
+)
+SELECT * FROM inserted;
+\ir ../migrations/000010_product_service_profiles.up.sql
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM product_service_profiles pp
+        JOIN t39_product p ON p.company_id=pp.company_id AND p.id=pp.product_id AND p.profile_id=pp.profile_id
+    ) THEN
+        RAISE EXCEPTION 'Existing product profile assignment was not migrated';
+    END IF;
+END $$;
+\ir ../migrations/000010_product_service_profiles.down.sql
+\ir ../migrations/000010_product_service_profiles.up.sql
+
 \ir ../migrations/000009_drop_company_code.down.sql
 \ir ../migrations/000008_customer_mobile_identity.down.sql
 DO $$
@@ -97,5 +118,6 @@ BEGIN
 END $$;
 \ir ../migrations/000008_customer_mobile_identity.up.sql
 \ir ../migrations/000009_drop_company_code.up.sql
+\ir ../migrations/000010_product_service_profiles.up.sql
 ROLLBACK;
 \echo 'T33 customer merge, unique mobile, dropped customer number and company code, down and reapply checks passed; all test changes rolled back.'

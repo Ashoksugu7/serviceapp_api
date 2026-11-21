@@ -138,7 +138,12 @@ func (s *CatalogStore) ListPage(ctx context.Context, resource, companyID, profil
 	}
 	for _, name := range keys(q.Filters) {
 		filter := spec.filters[name]
-		condition := filter.column + "=" + arg(q.Filters[name])
+		var condition string
+		if resource == "products" && name == "profile_id" {
+			condition = "EXISTS(SELECT 1 FROM product_service_profiles pp WHERE pp.company_id=t.company_id AND pp.product_id=t.id AND pp.profile_id=" + arg(q.Filters[name]) + ")"
+		} else {
+			condition = filter.column + "=" + arg(q.Filters[name])
+		}
 		if filter.orNull {
 			condition = "(" + condition + " OR " + filter.column + " IS NULL)"
 		}

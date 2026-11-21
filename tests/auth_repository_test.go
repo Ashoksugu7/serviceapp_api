@@ -47,7 +47,7 @@ func TestAuthStoreLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	for _, name := range []string{"000001_company_master_data.up.sql", "000002_service_transactions.up.sql", "000003_authentication.up.sql", "000004_user_phone.up.sql", "000005_must_change_password.up.sql", "000006_password_reset_tokens.up.sql", "000007_record_history_events.up.sql", "000008_customer_mobile_identity.up.sql", "000009_drop_company_code.up.sql"} {
+	for _, name := range []string{"000001_company_master_data.up.sql", "000002_service_transactions.up.sql", "000003_authentication.up.sql", "000004_user_phone.up.sql", "000005_must_change_password.up.sql", "000006_password_reset_tokens.up.sql", "000007_record_history_events.up.sql", "000008_customer_mobile_identity.up.sql", "000009_drop_company_code.up.sql", "000010_product_service_profiles.up.sql", "000011_service_profile_catalog_entry_mode.up.sql", "000012_standby_requires_service_record.up.sql"} {
 		migration, err := os.ReadFile(filepath.Join("..", "migrations", name))
 		if err != nil {
 			t.Fatal(err)

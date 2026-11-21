@@ -244,7 +244,7 @@ func validateLinkedValues(ctx context.Context, tx pgx.Tx, companyID, profileID s
 			var valid bool
 			switch field.Type {
 			case "linked_product":
-				_ = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM products WHERE company_id=$1 AND profile_id=$2 AND id=$3 AND status='ACTIVE')`, companyID, profileID, id).Scan(&valid)
+				_ = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM products p JOIN product_service_profiles pp ON pp.company_id=p.company_id AND pp.product_id=p.id WHERE p.company_id=$1 AND pp.profile_id=$2 AND p.id=$3 AND p.status='ACTIVE')`, companyID, profileID, id).Scan(&valid)
 			case "linked_charges":
 				_ = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM charges WHERE company_id=$1 AND profile_id=$2 AND id=$3 AND status='ACTIVE')`, companyID, profileID, id).Scan(&valid)
 			case "staff_role":

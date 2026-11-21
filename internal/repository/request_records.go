@@ -282,7 +282,7 @@ func (s *CatalogStore) resolveLinkedValues(ctx context.Context, companyID, profi
 			selectable := false
 			switch kind {
 			case "linked_product":
-				err = s.pool.QueryRow(ctx, `SELECT name,status FROM products WHERE company_id=$1 AND profile_id=$2 AND id=$3`, companyID, profileID, id).Scan(&label, &status)
+				err = s.pool.QueryRow(ctx, `SELECT p.name,p.status FROM products p JOIN product_service_profiles pp ON pp.company_id=p.company_id AND pp.product_id=p.id WHERE p.company_id=$1 AND pp.profile_id=$2 AND p.id=$3`, companyID, profileID, id).Scan(&label, &status)
 				selectable = status == "ACTIVE"
 			case "linked_charges":
 				err = s.pool.QueryRow(ctx, `SELECT name,status FROM charges WHERE company_id=$1 AND profile_id=$2 AND id=$3`, companyID, profileID, id).Scan(&label, &status)
