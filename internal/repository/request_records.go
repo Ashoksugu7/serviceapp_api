@@ -325,10 +325,10 @@ func (s *CatalogStore) UpdateServiceRequest(ctx context.Context, companyID, id, 
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var profileID, oldDate, oldCustomer string
+	var profileID, oldDate, oldCustomer, oldStatus string
 	var oldFormRaw []byte
 	var closed bool
-	if err := tx.QueryRow(ctx, `SELECT r.profile_id::text,r.service_date::text,r.customer_id::text,r.form_data,s.is_closed FROM service_requests r JOIN service_profile_statuses s ON s.company_id=r.company_id AND s.id=r.status_id WHERE r.company_id=$1 AND r.id=$2 FOR UPDATE OF r`, companyID, id).Scan(&profileID, &oldDate, &oldCustomer, &oldFormRaw, &closed); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, `SELECT r.profile_id::text,r.service_date::text,r.customer_id::text,r.status_id::text,r.form_data,s.is_closed FROM service_requests r JOIN service_profile_statuses s ON s.company_id=r.company_id AND s.id=r.status_id WHERE r.company_id=$1 AND r.id=$2 FOR UPDATE OF r`, companyID, id).Scan(&profileID, &oldDate, &oldCustomer, &oldStatus, &oldFormRaw, &closed); errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	} else if err != nil {
 		return nil, err
@@ -405,9 +405,22 @@ func (s *CatalogStore) UpdateServiceRequest(ctx context.Context, companyID, id, 
 			changes[key] = [2]any{oldValue, newValue}
 		}
 	}
+	newStatus := oldStatus
+	if patch.FormDataSet {
+		workflowStatusID, err := workflowStatus(ctx, tx, companyID, profileID, newForm)
+		if err != nil {
+			return nil, err
+		}
+		if workflowStatusID != "" {
+			newStatus = workflowStatusID
+		}
+	}
+	if newStatus != oldStatus {
+		changes["core.status"] = [2]any{oldStatus, newStatus}
+	}
 	if len(changes) > 0 {
 		formJSON, _ := json.Marshal(newForm)
-		if _, err := tx.Exec(ctx, `UPDATE service_requests SET service_date=$3,customer_id=$4,form_data=$5,updated_at=now() WHERE company_id=$1 AND id=$2`, companyID, id, newDate, newCustomer, formJSON); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE service_requests SET service_date=$3,customer_id=$4,status_id=$5,form_data=$6,updated_at=now() WHERE company_id=$1 AND id=$2`, companyID, id, newDate, newCustomer, newStatus, formJSON); err != nil {
 			return nil, err
 		}
 		for key, pair := range changes {
@@ -431,8 +444,9 @@ func (s *CatalogStore) ChangeServiceRequestStatus(ctx context.Context, companyID
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var profileID, oldStatus string
+	var formDataRaw []byte
 	var currentClosed bool
-	if err := tx.QueryRow(ctx, `SELECT r.profile_id::text,r.status_id::text,s.is_closed FROM service_requests r JOIN service_profile_statuses s ON s.company_id=r.company_id AND s.id=r.status_id WHERE r.company_id=$1 AND r.id=$2 FOR UPDATE OF r`, companyID, id).Scan(&profileID, &oldStatus, &currentClosed); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, `SELECT r.profile_id::text,r.status_id::text,r.form_data,s.is_closed FROM service_requests r JOIN service_profile_statuses s ON s.company_id=r.company_id AND s.id=r.status_id WHERE r.company_id=$1 AND r.id=$2 FOR UPDATE OF r`, companyID, id).Scan(&profileID, &oldStatus, &formDataRaw, &currentClosed); errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	} else if err != nil {
 		return nil, err
@@ -445,6 +459,15 @@ func (s *CatalogStore) ChangeServiceRequestStatus(ctx context.Context, companyID
 	}
 	if currentClosed && actorRole != "ADMIN" {
 		return nil, service.Forbidden("Only an admin can reopen a closed record.")
+	}
+	formData := map[string]any{}
+	if err := json.Unmarshal(formDataRaw, &formData); err != nil {
+		return nil, err
+	}
+	if matches, err := workflowRuleMatchesStatus(ctx, tx, companyID, profileID, statusID, formData); err != nil {
+		return nil, err
+	} else if !matches {
+		return nil, workflowRuleError(statusID)
 	}
 	if targetClosed {
 		var outstanding bool

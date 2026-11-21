@@ -33,6 +33,8 @@ func registerManagementRoutes(m *http.ServeMux, auth *service.AuthService, store
 		m.HandleFunc("/companies/{companyId}/service-profiles/{profileId}/"+r+"/{id}", authenticated(auth, logger, nestedItemHandler(auth, store, logger, r)))
 	}
 	m.HandleFunc("/companies/{companyId}/service-profiles/{profileId}/out-store-mapping", authenticated(auth, logger, mappingHandler(auth, store, logger)))
+	m.HandleFunc("/companies/{companyId}/service-profiles/{profileId}/workflow-rules", authenticated(auth, logger, workflowRulesHandler(auth, store, logger)))
+	m.HandleFunc("/companies/{companyId}/service-profiles/{profileId}/workflow-rules/{statusId}", authenticated(auth, logger, workflowRuleHandler(auth, store, logger)))
 	m.HandleFunc("/companies/{companyId}/service-profiles/{profileId}/form", authenticated(auth, logger, formHandler(auth, store, logger)))
 	m.HandleFunc("/companies/{companyId}/service-requests", authenticated(auth, logger, serviceRequestCollectionHandler(auth, store, logger)))
 	m.HandleFunc("/companies/{companyId}/service-requests/{id}", authenticated(auth, logger, serviceRequestItemHandler(auth, store, logger)))
@@ -426,6 +428,62 @@ func mappingHandler(auth *service.AuthService, store *repository.CatalogStore, l
 			return
 		}
 		writeJSON(w, 200, item)
+	}
+}
+
+func workflowRulesHandler(auth *service.AuthService, store *repository.CatalogStore, logger *slog.Logger) principalHandler {
+	return func(w http.ResponseWriter, r *http.Request, p service.Principal) {
+		if r.Method != http.MethodGet {
+			methodError(w, "GET")
+			return
+		}
+		cid, pid := r.PathValue("companyId"), r.PathValue("profileId")
+		if err := auth.AuthorizeCompany(p, cid, "SUPER_ADMIN", "ADMIN"); err != nil {
+			writeAuthError(w, err, 0, logger)
+			return
+		}
+		items, err := store.ListWorkflowRules(r.Context(), cid, pid)
+		if err != nil {
+			writeManagementError(w, err, logger)
+			return
+		}
+		writeList(w, items)
+	}
+}
+
+func workflowRuleHandler(auth *service.AuthService, store *repository.CatalogStore, logger *slog.Logger) principalHandler {
+	return func(w http.ResponseWriter, r *http.Request, p service.Principal) {
+		cid, pid, statusID := r.PathValue("companyId"), r.PathValue("profileId"), r.PathValue("statusId")
+		if err := auth.AuthorizeCompany(p, cid, "SUPER_ADMIN", "ADMIN"); err != nil {
+			writeAuthError(w, err, 0, logger)
+			return
+		}
+		switch r.Method {
+		case http.MethodPut:
+			var body struct {
+				StaffRoleID       string `json:"staff_role_id"`
+				ConditionFieldKey string `json:"condition_field_key"`
+				ConditionValue    any    `json:"condition_value"`
+				Priority          int    `json:"priority"`
+			}
+			if !decodeJSON(w, r, &body) {
+				return
+			}
+			item, err := store.SetWorkflowRule(r.Context(), cid, pid, statusID, repository.WorkflowRule{StaffRoleID: body.StaffRoleID, ConditionFieldKey: body.ConditionFieldKey, ConditionValue: body.ConditionValue, Priority: body.Priority})
+			if err != nil {
+				writeManagementError(w, err, logger)
+				return
+			}
+			writeJSON(w, http.StatusOK, item)
+		case http.MethodDelete:
+			if err := store.DeleteWorkflowRule(r.Context(), cid, pid, statusID); err != nil {
+				writeManagementError(w, err, logger)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			methodError(w, "PUT, DELETE")
+		}
 	}
 }
 func formHandler(auth *service.AuthService, store *repository.CatalogStore, logger *slog.Logger) principalHandler {

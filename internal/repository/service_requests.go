@@ -140,6 +140,10 @@ func (s *CatalogStore) CreateServiceRequest(ctx context.Context, input ServiceRe
 			return nil, ErrNotFound
 		}
 		statusID = *sentStatusID
+	} else if workflowStatusID, err := workflowStatus(ctx, tx, input.CompanyID, input.ProfileID, input.FormData); err != nil {
+		return nil, err
+	} else if workflowStatusID != "" {
+		statusID = workflowStatusID
 	}
 	var createdCustomer map[string]any
 	if newCustomer != nil {
@@ -167,7 +171,12 @@ func (s *CatalogStore) CreateServiceRequest(ctx context.Context, input ServiceRe
 		return nil, err
 	}
 	var requestID string = request["id"].(string)
-	if _, err := tx.Exec(ctx, `INSERT INTO service_request_history(company_id,request_id,field_key,new_value,changed_by)VALUES($1,$2,'core.status',to_jsonb($3::text),$4)`, input.CompanyID, requestID, initialStatusID, input.CreatedBy); err != nil {
+	historyStatusID := statusID
+	if input.OutStore != nil {
+		// Preserve the explicit initial -> sent history used by Out-Store.
+		historyStatusID = initialStatusID
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO service_request_history(company_id,request_id,field_key,new_value,changed_by)VALUES($1,$2,'core.status',to_jsonb($3::text),$4)`, input.CompanyID, requestID, historyStatusID, input.CreatedBy); err != nil {
 		return nil, err
 	}
 	request["out_store_entry"] = nil
