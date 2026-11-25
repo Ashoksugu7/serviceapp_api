@@ -107,12 +107,9 @@ func (s *CatalogStore) DeleteWorkflowRule(ctx context.Context, companyID, profil
 // when a staff member is selected for its role and its optional field value is
 // exactly equal to the configured value.
 func workflowStatus(ctx context.Context, tx pgx.Tx, companyID, profileID string, formData map[string]any) (string, error) {
-	rows, err := tx.Query(ctx, `SELECT w.status_id::text,w.staff_role_id::text,w.condition_field_key,w.condition_value FROM service_profile_workflow_rules w JOIN service_profile_statuses st ON st.company_id=w.company_id AND st.id=w.status_id AND st.enabled WHERE w.company_id=$1 AND w.profile_id=$2 ORDER BY w.priority,w.id`, companyID, profileID)
-	if err != nil {
-		return "", err
-	}
-	defer rows.Close()
 	roles := map[string]bool{}
+	type selectedRole struct{ staffID, roleID string }
+	var selected []selectedRole
 	roleRows, err := tx.Query(ctx, `SELECT field_key,config->>'role_id' FROM service_profile_fields WHERE company_id=$1 AND profile_id=$2 AND field_type='staff_role' AND enabled`, companyID, profileID)
 	if err != nil {
 		return "", err
@@ -124,14 +121,7 @@ func workflowStatus(ctx context.Context, tx pgx.Tx, companyID, profileID string,
 			return "", err
 		}
 		if staffID, ok := formData[key].(string); ok && staffID != "" {
-			var assigned bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM staff_role_assignments WHERE company_id=$1 AND staff_id=$2 AND role_id=$3)`, companyID, staffID, roleID).Scan(&assigned); err != nil {
-				roleRows.Close()
-				return "", err
-			}
-			if assigned {
-				roles[roleID] = true
-			}
+			selected = append(selected, selectedRole{staffID, roleID})
 		}
 	}
 	if err := roleRows.Err(); err != nil {
@@ -139,6 +129,20 @@ func workflowStatus(ctx context.Context, tx pgx.Tx, companyID, profileID string,
 		return "", err
 	}
 	roleRows.Close()
+	for _, selection := range selected {
+		var assigned bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM staff_role_assignments WHERE company_id=$1 AND staff_id=$2 AND role_id=$3)`, companyID, selection.staffID, selection.roleID).Scan(&assigned); err != nil {
+			return "", err
+		}
+		if assigned {
+			roles[selection.roleID] = true
+		}
+	}
+	rows, err := tx.Query(ctx, `SELECT w.status_id::text,w.staff_role_id::text,w.condition_field_key,w.condition_value FROM service_profile_workflow_rules w JOIN service_profile_statuses st ON st.company_id=w.company_id AND st.id=w.status_id AND st.enabled WHERE w.company_id=$1 AND w.profile_id=$2 ORDER BY w.priority,w.id`, companyID, profileID)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
 	for rows.Next() {
 		var statusID, roleID string
 		var conditionKey *string

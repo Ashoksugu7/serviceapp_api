@@ -625,3 +625,78 @@ exit status 1
 {"time":"2026-11-21T20:28:24.406509+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles/27302865-d43a-4446-8dcf-6116e6b031af/form","status":200,"duration":2187584}
 {"time":"2026-11-21T20:28:25.354685+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":934625}
 {"time":"2026-11-21T20:28:25.365244+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/dashboard","status":200,"duration":5452250}
+[2026-11-25 19:11:36] Starting ServiceOps360 API
+{"time":"2026-11-25T19:11:37.662192+05:30","level":"INFO","msg":"email delivery","mode":"log","app_base_url":"http://localhost:3000"}
+{"time":"2026-11-25T19:11:37.663706+05:30","level":"INFO","msg":"API started","address":"127.0.0.1:8080"}
+{"time":"2026-11-25T19:12:45.094686+05:30","level":"WARN","msg":"HTTP request failed","method":"POST","path":"/api/v1/auth/login","status":401,"duration":76033583,"error_code":"AUTHENTICATION_FAILED","error_message":"Invalid email, mobile number or password"}
+{"time":"2026-11-25T19:12:47.486541+05:30","level":"WARN","msg":"HTTP request failed","method":"POST","path":"/api/v1/auth/login","status":401,"duration":41258000,"error_code":"AUTHENTICATION_FAILED","error_message":"Invalid email, mobile number or password"}
+{"time":"2026-11-25T19:12:53.542199+05:30","level":"WARN","msg":"HTTP request failed","method":"POST","path":"/api/v1/auth/login","status":401,"duration":42500708,"error_code":"AUTHENTICATION_FAILED","error_message":"Invalid email, mobile number or password"}
+{"time":"2026-11-25T19:13:01.40436+05:30","level":"INFO","msg":"HTTP request completed","method":"POST","path":"/api/v1/auth/login","status":200,"duration":42948916}
+{"time":"2026-11-25T19:13:01.487008+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":2143875}
+{"time":"2026-11-25T19:13:01.527937+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/dashboard","status":200,"duration":4736334}
+{"time":"2026-11-25T19:13:06.12812+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":2802292}
+{"time":"2026-11-25T19:13:06.814729+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies","status":200,"duration":5450333}
+{"time":"2026-11-25T19:13:10.552268+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":852375}
+{"time":"2026-11-25T19:13:10.609039+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32","status":200,"duration":1809916}
+{"time":"2026-11-25T19:13:10.630196+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/users","status":200,"duration":4696458}
+{"time":"2026-11-25T19:13:15.198593+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":750167}
+{"time":"2026-11-25T19:13:15.204763+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/dashboard","status":200,"duration":1050916}
+{"time":"2026-11-25T19:13:17.766819+05:30","level":"INFO","msg":"HTTP request completed","method":"POST","path":"/api/v1/auth/logout","status":204,"duration":5796459}
+{"time":"2026-11-25T19:13:23.399545+05:30","level":"INFO","msg":"HTTP request completed","method":"POST","path":"/api/v1/auth/login","status":200,"duration":50569583}
+{"time":"2026-11-25T19:13:23.43093+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":462084}
+{"time":"2026-11-25T19:13:23.459231+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/dashboard","status":200,"duration":21542708}
+{"time":"2026-11-25T19:13:25.454936+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":974958}
+{"time":"2026-11-25T19:13:25.542145+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles","status":200,"duration":3151541}
+{"time":"2026-11-25T19:13:25.570624+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests","status":200,"duration":31377958}
+{"time":"2026-11-25T19:13:30.550813+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":1368667}
+{"time":"2026-11-25T19:13:30.714728+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/products","status":200,"duration":8486750}
+{"time":"2026-11-25T19:13:30.728636+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/charges","status":200,"duration":11138750}
+{"time":"2026-11-25T19:13:30.729902+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles/27302865-d43a-4446-8dcf-6116e6b031af/form","status":200,"duration":15241625}
+{"time":"2026-11-25T19:13:30.772342+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/staff","status":200,"duration":49938125}
+{"time":"2026-11-25T19:13:35.716436+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":1354958}
+{"time":"2026-11-25T19:13:35.865921+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles/27302865-d43a-4446-8dcf-6116e6b031af/fields","status":200,"duration":48411209}
+{"time":"2026-11-25T19:14:01.382668+05:30","level":"INFO","msg":"HTTP request completed","method":"POST","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles/27302865-d43a-4446-8dcf-6116e6b031af/fields","status":201,"duration":7400042}
+{"time":"2026-11-25T19:14:01.402997+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles/27302865-d43a-4446-8dcf-6116e6b031af/fields","status":200,"duration":3710125}
+{"time":"2026-11-25T19:14:01.407714+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles/27302865-d43a-4446-8dcf-6116e6b031af/form","status":200,"duration":2412291}
+{"time":"2026-11-25T19:14:41.775148+05:30","level":"INFO","msg":"HTTP request completed","method":"POST","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles/27302865-d43a-4446-8dcf-6116e6b031af/fields","status":201,"duration":5137417}
+{"time":"2026-11-25T19:14:41.792866+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles/27302865-d43a-4446-8dcf-6116e6b031af/fields","status":200,"duration":1576125}
+{"time":"2026-11-25T19:14:41.802991+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles/27302865-d43a-4446-8dcf-6116e6b031af/form","status":200,"duration":3354334}
+{"time":"2026-11-25T19:14:44.631624+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":587833}
+{"time":"2026-11-25T19:14:44.769702+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles","status":200,"duration":4014375}
+{"time":"2026-11-25T19:14:44.773572+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests","status":200,"duration":17814166}
+{"time":"2026-11-25T19:14:45.918107+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":684542}
+{"time":"2026-11-25T19:14:46.011573+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/products","status":200,"duration":6364625}
+{"time":"2026-11-25T19:14:46.013649+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/charges","status":200,"duration":2141959}
+{"time":"2026-11-25T19:14:46.025764+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/staff","status":200,"duration":1675375}
+{"time":"2026-11-25T19:14:52.749785+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/customers","status":200,"duration":7944667}
+{"time":"2026-11-25T19:15:02.843091+05:30","level":"ERROR","msg":"management operation failed","error":"conn busy"}
+{"time":"2026-11-25T19:15:02.84314+05:30","level":"ERROR","msg":"HTTP request failed","method":"POST","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests","status":500,"duration":6886041,"error_code":"INTERNAL_ERROR","error_message":"Internal server error"}
+{"time":"2026-11-25T19:15:04.531566+05:30","level":"ERROR","msg":"management operation failed","error":"conn busy"}
+{"time":"2026-11-25T19:15:04.53161+05:30","level":"ERROR","msg":"HTTP request failed","method":"POST","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests","status":500,"duration":4361666,"error_code":"INTERNAL_ERROR","error_message":"Internal server error"}
+{"time":"2026-11-25T19:15:05.069704+05:30","level":"ERROR","msg":"management operation failed","error":"conn busy"}
+{"time":"2026-11-25T19:15:05.069752+05:30","level":"ERROR","msg":"HTTP request failed","method":"POST","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests","status":500,"duration":2646708,"error_code":"INTERNAL_ERROR","error_message":"Internal server error"}
+[2026-11-25 19:20:54] Starting ServiceOps360 API
+{"time":"2026-11-25T19:20:56.113904+05:30","level":"INFO","msg":"email delivery","mode":"log","app_base_url":"http://localhost:3000"}
+{"time":"2026-11-25T19:20:56.115388+05:30","level":"INFO","msg":"API started","address":"127.0.0.1:8080"}
+{"time":"2026-11-25T19:20:59.597026+05:30","level":"INFO","msg":"HTTP request completed","method":"POST","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests","status":201,"duration":30049833}
+{"time":"2026-11-25T19:20:59.634549+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles","status":200,"duration":2674000}
+{"time":"2026-11-25T19:20:59.641374+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-profiles/27302865-d43a-4446-8dcf-6116e6b031af/form","status":200,"duration":2915708}
+{"time":"2026-11-25T19:21:04.42902+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":1542917}
+{"time":"2026-11-25T19:21:04.529869+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests","status":200,"duration":15807542}
+{"time":"2026-11-25T19:21:07.28857+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":2256083}
+{"time":"2026-11-25T19:21:07.410605+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests/836dbb43-0d49-40c3-bb59-de2553e54be7","status":200,"duration":12908958}
+{"time":"2026-11-25T19:21:07.498284+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/out-store-entries","status":200,"duration":7434709}
+{"time":"2026-11-25T19:21:07.503423+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests/836dbb43-0d49-40c3-bb59-de2553e54be7/history","status":200,"duration":2639834}
+{"time":"2026-11-25T19:21:07.520211+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/standby-issues","status":200,"duration":23049083}
+{"time":"2026-11-25T19:21:09.665226+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/products","status":200,"duration":7853417}
+{"time":"2026-11-25T19:21:09.666312+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/charges","status":200,"duration":7127458}
+{"time":"2026-11-25T19:21:09.677093+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/staff","status":200,"duration":13333542}
+{"time":"2026-11-25T19:21:14.134409+05:30","level":"INFO","msg":"HTTP request completed","method":"PATCH","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests/836dbb43-0d49-40c3-bb59-de2553e54be7","status":200,"duration":16195500}
+{"time":"2026-11-25T19:21:14.158798+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests/836dbb43-0d49-40c3-bb59-de2553e54be7/history","status":200,"duration":2239708}
+{"time":"2026-11-25T19:21:14.159258+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests/836dbb43-0d49-40c3-bb59-de2553e54be7","status":200,"duration":7829791}
+{"time":"2026-11-25T19:21:23.798275+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":1405042}
+{"time":"2026-11-25T19:21:23.922884+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/standby-items","status":200,"duration":2217375}
+{"time":"2026-11-25T19:21:23.950443+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/standby-items/7797e6eb-d386-42be-9753-2467c85a00c6/issues","status":200,"duration":7438375}
+{"time":"2026-11-25T19:21:24.411373+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":650917}
+{"time":"2026-11-25T19:21:24.503824+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/companies/4d518b24-6298-4bf3-a334-31d4105a7d32/service-requests","status":200,"duration":11701583}
+{"time":"2026-11-25T19:21:25.865909+05:30","level":"INFO","msg":"HTTP request completed","method":"GET","path":"/api/v1/auth/me","status":200,"duration":574916}
